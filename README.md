@@ -1,6 +1,33 @@
 # Smarter Garage
 
-An Android application for SmartThings-connected garage doors, with Android Auto integration and location-based automation.
+https://play.google.com/store/apps/details?id=com.lusion.sgauto
+
+An Android application for SmartThings-connected garage doors, with Android Auto integration and location-based automation. I made this app for myself, as I wanted a much better experience for controlling my garage through Android Auto and through my phone compared to the OOB SmartThings options.
+
+I wanted several key features for usability as I perceived met my needs.
+
+1. Only show in Android Auto when close to home, so geofence setup was key.
+2. As easy to access as possible from AA, which led to a mountain of notification hacking to get through AA limitations. I think I have the only 'animated' AA notification in existence. Although, new tightened restrictions have forced me away from leveraging this feature, but I have to say, it's actually worked out to be for the good.
+3. Persistently present garage controls in notification on phone when at home, but only show notification when away if the garage is open.
+4. A thumb smash friendly phone UI for simplicity as an alternate interface, with cool animations because it stinks without them. Really.
+5. I only have one automated garage door opener, so no cool "multi garage" features here. In my case, it's a GoControl/Linear GD00Z-4 Z-Wave and I'm stunned it has lasted for so many years and that the door sensor battery lasts so long. Good device.
+6. Automatically start when phone boots. Keep running if updated. Never make me go find this thing or the controls then when the point is to quickly get to it. 
+7. Try, as best as possible to keep the current garage status without heavy polling and lacking any push features. I don't want this app to track anything sensitive, and I don't want users to have to configure SmartThings for push notifications when they are hard to configure, and GCM and whatever other hurdles to make that work. I think I kind of nailed it.
+8. Be as small as possible without writing it in C.
+9. Never, ever, ever, show up on the battery usage list.
+10. Oh, and because I was going to put this on github, never have to send anything or store anything to any cloud service, or anything that remotely looks like the app would be collecting personal information, especially as it has your geofence and your smartthings key stored.
+
+I purposely did not make the following.
+
+1. A widget. Too easy to accidentally trigger.
+2. Voice controls. Maybe I can figure out Gemini if that has settled down.
+3. Any "automatic open door when arriving, close door when leaving". Though it was originally tempting, you'll soon realize why it's a terrible idea.
+
+This app started as Hand written cobbled Java and XML layouts from the brutally bad examples I could find in the dark days of AA development. I converted it to Kotlin/Compose and now I maintain it with AI, of course. 
+
+Oh, it's been a terrible journey getting through Google Play Store policy to get my app published. They were(are?) ridiculously strict about AA apps, or at least they were in the beginning. Feel free to try!
+
+I should probably publish some material on how to get the smarthings API key. I'll try to add that later.
 
 ## Local development
 

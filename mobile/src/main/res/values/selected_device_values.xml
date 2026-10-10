@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <array name="selected_device_values">
+        <item>NONE</item>
+    </array>
+</resources>

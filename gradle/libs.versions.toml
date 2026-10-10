@@ -1,0 +1,54 @@
+[versions]
+activityCompose = "1.13.0"
+androidx-appcompat = "1.8.0"
+car-app = "1.7.0"
+compose = "1.12.1"
+coreKtx = "1.19.1"
+firebaseBom = "35.0.0"
+firebaseCrashlyticsGradle = "3.0.8"
+googleServices = "4.5.0"
+gradle = "9.4.1"
+gson = "2.14.0"
+kotlin = "2.4.21"
+kotlinxCoroutinesAndroid = "1.11.0"
+ksp = "2.3.9"
+lifecycleProcess = "2.11.0"
+material = "1.14.0"
+material3 = "1.4.0"
+okhttp = "5.5.0"
+playServicesLocation = "21.4.0"
+preferenceKtx = "1.2.1"
+retrofit = "3.0.0"
+workRuntimeKtx = "2.12.0"
+
+[libraries]
+activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+appcompat = { module = "androidx.appcompat:appcompat", version.ref = "androidx-appcompat" }
+car-app = { module = "androidx.car.app:app", version.ref = "car-app" }
+converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "retrofit" }
+core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
+firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
+foundation = { module = "androidx.compose.foundation:foundation", version.ref = "compose" }
+gradle = { module = "com.android.tools.build:gradle", version.ref = "gradle" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
+lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycleProcess" }
+material = { module = "com.google.android.material:material", version.ref = "material" }
+material3 = { module = "androidx.compose.material3:material3", version.ref = "material3" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
+preference-ktx = { module = "androidx.preference:preference-ktx", version.ref = "preferenceKtx" }
+retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
+ui-tooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "compose" }
+ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "compose" }
+ui-tooling-preview-android = { module = "androidx.compose.ui:ui-tooling-preview-android", version.ref = "compose" }
+work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workRuntimeKtx" }
+
+[plugins]
+com-google-devtools-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsGradle" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+version-catalog-update = "nl.littlerobots.version-catalog-update:1.1.1"

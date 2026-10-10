@@ -1,0 +1,180 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <PreferenceCategory
+        android:key="home"
+        app:icon="@drawable/smarter_garage_svg"
+        app:title="@string/app_name">
+        <Preference
+            android:key="set_home"
+            android:summary="Home is set?"
+            android:title="Click to set home for garage"
+            app:icon="@drawable/exclamation" />
+    </PreferenceCategory>
+    <PreferenceCategory
+        android:key="api"
+        app:title="@string/key_pref">
+        <EditTextPreference
+            android:id="@+id/personal_access_token"
+            android:autofillHints="your SmartThings Personal Access Token(PAT)"
+            android:contentDescription="your SmartThings Personal Access Token(PAT)"
+            android:inputType="textPassword"
+            android:key="personal_access_token"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="Personal Access Token"
+            app:dialogIcon="@drawable/smarter_garage_svg"
+            app:dialogMessage="Your SmartThings Personal Access Token"
+            app:icon="@drawable/exclamation" />
+<!--        <EditTextPreference-->
+<!--            android:id="@+id/garage_device_id"-->
+<!--            android:autofillHints="Garage device ID(base-garage-door)"-->
+<!--            android:contentDescription="Garage device ID"-->
+<!--            android:inputType="textPassword"-->
+<!--            android:key="garage_device_id"-->
+<!--            android:selectAllOnFocus="true"-->
+<!--            android:singleLine="true"-->
+<!--            android:title="Garage device ID"-->
+<!--            app:dialogIcon="@drawable/smarter_garage_svg"-->
+<!--            app:dialogMessage="The device ID for the garage door(base-garage-door)"-->
+<!--            app:icon="@drawable/exclamation" />-->
+        <ListPreference
+            android:key="garage_device_id"
+            android:title="Selected garage door"
+            android:summary="Select garage door control once personal access token is set"
+            android:entries="@array/selected_device"
+            android:entryValues="@array/selected_device_values"
+            android:defaultValue="NONE"
+            />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="general"
+        app:initialExpandedChildrenCount="2"
+        app:title="@string/general">
+        <Preference
+            android:key="increase_perimeter"
+            android:title="Click to increase perimeter"
+            app:icon="@drawable/plus_circle" />
+        <Preference
+            android:key="decrease_perimeter"
+            android:title="Click to decrease perimeter"
+            app:icon="@drawable/minus_circle" />
+        <EditTextPreference
+            android:id="@+id/geofence_custom_name"
+            android:contentDescription="The name of the location of your garage"
+            android:defaultValue="Home"
+            android:dialogIcon="@drawable/smarter_garage_svg"
+            android:focusedByDefault="true"
+            android:key="geofence_custom_name"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:summary="The name of the location of your garage"
+            android:title="Your geofence name"
+            app:dialogIcon="@drawable/smarter_garage_svg"
+            app:dialogMessage="Your name for your geofence, the boundary for when the garage notifications should be displayed"
+            tools:isPreferenceVisible="true" />
+        <ListPreference
+            android:defaultValue="IMPORTANCE_DEFAULT"
+            android:entries="@array/priority"
+            android:entryValues="@array/priority_values"
+            android:key="auto_notification_priority"
+            android:title="Notification priority" />
+        <SwitchPreference
+            android:contentDescription="Thin notification, modern versions of Android force a minimum display size"
+            android:defaultValue="true"
+            android:key="thin_notification"
+            android:summary="Display thin notification by default"
+            android:title="Thin notification" />
+        <SwitchPreference
+            android:contentDescription="Use a foreground service to keep garage monitoring active when using Android Auto notification controls without the app open"
+            android:defaultValue="false"
+            android:key="use_foreground_service_auto"
+            android:summary="Prevents Android from throttling network when using Auto notification controls"
+            android:title="Foreground service for Auto notifications" />
+        <Preference
+            android:key="battery_optimization"
+            android:title="Battery optimization"
+            android:summary="Tap to exempt app from battery restrictions"
+            app:icon="@drawable/exclamation" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="backup_restore"
+        app:title="@string/backup_restore">
+        <Preference
+            android:key="backup_settings"
+            android:title="@string/backup_settings_title"
+            android:summary="@string/backup_settings_summary"
+            app:icon="@drawable/smarter_garage_svg" />
+        <Preference
+            android:key="restore_settings"
+            android:title="@string/restore_settings_title"
+            android:summary="@string/restore_settings_summary"
+            app:icon="@drawable/smarter_garage_svg" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:initialExpandedChildrenCount="0"
+        android:key="debugging"
+        app:title="@string/debugging">
+        <SwitchPreference
+            android:contentDescription="Route all commands to the Debug server (bypassing SmartThings)"
+            android:defaultValue="false"
+            android:key="debug_switch"
+            android:summary="Route all commands to the Debug server"
+            android:title="Debug" />
+        <SwitchPreference
+            android:contentDescription="Send Debug Pings to the Debug server"
+            android:defaultValue="false"
+            android:key="force_ping"
+            android:summary="Send Debug Pings to the Debug server"
+            android:title="Ping Call" />
+        <SwitchPreference
+            android:contentDescription="Indicate last garage status request time in notification"
+            android:defaultValue="false"
+            android:key="show_request_time"
+            android:summary="Show time of last garage status request in notification"
+            android:title="Show lookup time in notification" />
+        <SwitchPreference
+            android:contentDescription="Show various geofence and garage event logging"
+            android:defaultValue="false"
+            android:key="show_log"
+            android:summary="Show logging"
+            android:title="Show log" />
+        <EditTextPreference
+            android:id="@+id/debug_server"
+            android:autofillHints="debug server"
+            android:contentDescription="server and port"
+            android:defaultValue="https://10.0.2.2:3000"
+            android:inputType="text"
+            android:key="debug_server"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="Debug server"
+            app:dialogIcon="@drawable/smarter_garage_svg"
+            app:dialogMessage="The server and port of your test API service. Run test server over SSL" />
+
+        <EditTextPreference
+            android:id="@+id/locationUpdateRate"
+            android:contentDescription="Time in seconds to get updated location in background. Faster updates times require more battery."
+            android:defaultValue="50"
+            android:key="locationUpdateRate"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:summary="Time in seconds to get updated location in background. Faster updates times require more battery."
+            android:title="Update rate" />
+        <PreferenceCategory android:title="About">
+            <EditTextPreference
+                android:key="version"
+                android:title="@string/version"
+                android:enabled="false"
+                android:selectable="false"
+                android:persistent="false"
+                android:shouldDisableView="false"/>
+        </PreferenceCategory>
+    </PreferenceCategory>
+
+</PreferenceScreen>

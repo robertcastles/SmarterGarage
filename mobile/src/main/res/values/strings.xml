@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Smarter Garage</string>
+    <string name="action_settings">Settings</string>
+
+    <string name="no_home">Home?</string>
+
+    <string name="garage_notification">@string/app_name</string>
+    <string name="garage_notification_details">This allows you to control your garage when you are close to home</string>
+    <!-- Foreground-service (monitoring) notification: separate, minimally-visible card shown
+         only while actively checking the garage; removed as soon as monitoring stops. -->
+    <string name="garage_fg_service_channel_id">garage_foreground_service_min</string>
+    <string name="garage_fg_service_channel_name">Garage Monitoring Service</string>
+    <string name="garage_fg_service_channel_desc">Shown briefly while actively checking your garage status</string>
+    <string name="garage_monitoring">Checking garage status…</string>
+    <!-- Arrival heads-up: a high-importance one-shot notification that "peeks" on the
+         Android Auto screen when you enter the geofence, surfacing OPEN/CLOSE without
+         needing to open the app. Auto-dismisses shortly after. -->
+    <string name="garage_arrival_channel_id">garage_arrival</string>
+    <string name="garage_arrival_channel_name">Arrival at Home</string>
+    <string name="garage_arrival_channel_desc">Pops up your garage controls when you arrive home</string>
+    <string name="current_latitude">Current latitude:</string>
+    <string name="current_longitude">Current longitude:</string>
+    <string name="home_location">Home Location</string>
+    <string name="launch_activity">Launch activity</string>
+    <string name="location_unknown">Location unknown</string>
+    <string name="location_updates_label">Location Updates</string>
+
+    <string name="fine_location_permission_rationale">Location is needed to set your home</string>
+    <string name="bg_location_permission_rationale">Background location is needed to hide and show notifications automatically for your geofence while the app is not running</string>
+    <string name="permission_denied_explanation">Permission was denied, but is needed for core
+        functionality.</string>
+    <string name="settings">Settings</string>
+    <string name="ok">OK</string>
+    <string name="request_location_updates">Request updates</string>
+    <string name="remove_location_updates">Remove updates</string>
+    <string name="geofence_status">Geofence</string>
+    <string name="local_main_activity_listener">Lusion.SmarterGarage</string>
+
+    <string name="location_updated">Location Updated: %1$s</string>
+    <string name="geofence_transition_invalid_type">Invalid geofence transition type</string>
+    <string name="close_garage">Close Garage</string>
+    <string name="unknown_geofence_error">unknown geofence error</string>
+    <string name="geofence_not_available">geofence not available</string>
+    <string name="geofence_too_many_geofences">too many geofences</string>
+    <string name="geofence_too_many_pending_intents">too many geofence pending intents</string>
+    <string name="geofence_transition_notification_text">geofence transition notification</string>
+    <string name="geofence_transition_entered">geofence entered</string>
+    <string name="geofence_transition_exited">geofence_exited</string>
+    <string name="unknown_geofence_transition">unknown geofence transition</string>
+    <string name="insufficient_permissions">geofences insufficient permissions</string>
+    <string name="geofences_added">geofences added</string>
+    <string name="geofences_removed">geofences removed</string>
+    <string name="geofence_transition_dwelled">Geofence dwelled</string>
+    <string name="distance">\?</string>
+    <string name="latitude">Latitude</string>
+    <string name="longitude">Longitude</string>
+    <string name="new_lat">NewLat</string>
+    <string name="new_long">NewLong</string>
+    <string name="set_home">Home</string>
+    <string name="garage_status">Garage Status</string>
+    <string name="notification">Notification</string>
+    <string name="log">Log</string>
+    <string name="fence">Fence</string>
+    <string name="active_location">Active Location</string>
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="car_permission_desc_car_info">car_permission_desc_car_info</string>
+    <string name="car_permission_label_car_info">car_permission_label_car_info</string>
+    <!-- Preference Titles -->
+    <string name="messages_header">Messages</string>
+    <string name="sync_header">Sync</string>
+
+    <!-- Messages Preferences -->
+    <string name="signature_title">Your signature</string>
+    <string name="reply_title">Default reply action</string>
+
+    <!-- Sync Preferences -->
+    <string name="sync_title">Sync email periodically</string>
+    <string name="attachment_title">Download incoming attachments</string>
+    <string name="attachment_summary_on">Automatically download attachments for incoming emails
+    </string>
+    <string name="attachment_summary_off">Only download attachments when manually requested</string>
+    <string name="title_activity_sgsettings">SGSettingsActivity</string>
+    <string name="radius">Radius</string>
+    <string name="no_location">Unable to get current location</string>
+    <string name="radius_in_meters">%1$dM</string>
+    <string name="increase_perimeter">Increase perimeter</string>
+    <string name="decrease_perimeter">Decrease perimeter</string>
+    <string name="garage_device_id">garage_device_id</string>
+    <string name="geofence_exited">Geofence exited</string>
+    <string name="geofence_entered">Geofence entered</string>
+    <string name="geofence_dwelled">Geofence dwelled</string>
+    <string name="api_key_hint">Your SmartThings personal access token (PAT)</string>
+    <string name="personal_access_token_hint">Your SmartThings personal access token(PAT)</string>
+    <string name="locationUpdateRate_hint">Location update rate in seconds</string>
+    <string name="test">Test</string>
+    <string name="geofence_indicator">Geofence indicator</string>
+    <string name="notification_details_activity">Notification Details Activity</string>
+    <string name="log_text">Log</string>
+    <string name="show_garages">Show garages</string>
+    <string name="open_close">Open/Close</string>
+    <string name="open">Open</string>
+    <string name="send_open">Send open command</string>
+    <string name="wait">Please wait…</string>
+    <string name="close">Close</string>
+    <string name="send_close">Send close command</string>
+    <string name="notification_header">@string/app_name</string>
+    <string name="auto_setup_warning">When the vehicle is stopped, and it is safe, configure settings in the @string/app_name app</string>
+    <string name="geofence_added">geofencingClient fence added</string>
+    <string name="fence_failed">\"geofencingClient failed to add fence \"</string>
+    <string name="advanced">Advanced</string>
+    <string name="key_pref">SmartThings details</string>
+    <string name="divider">/</string>
+    <string name="general">General</string>
+    <string name="debugging">Debugging options</string>
+    <string name="backup_restore">Backup &amp; Restore</string>
+    <string name="backup_settings_title">Back up settings</string>
+    <string name="backup_settings_summary">Save your setup (home, geofence, credentials) to a file</string>
+    <string name="restore_settings_title">Restore settings</string>
+    <string name="restore_settings_summary">Import a settings backup file after reinstalling</string>
+    <string name="backup_default_filename">smartergarage-settings.json</string>
+    <string name="backup_success">Settings backed up</string>
+    <string name="backup_failed">Backup failed</string>
+    <string name="restore_success">Settings restored</string>
+    <string name="restore_failed">Restore failed — not a valid backup file</string>
+    <string name="smarter_garage">Smarter Garage</string>
+    <string name="guid_requirement">"The value must be a 'GUID'"</string>
+    <string name="invalid_input">Invalid input: </string>
+    <string name="version">Version</string>
+    <string name="add_thread">add thread</string>
+    <string name="remove_thread">remove thread</string>
+    <string name="garage_status_open">Open</string>
+    <string name="garage_status_opening">Opening</string>
+    <string name="garage_status_closed">Closed</string>
+    <string name="garage_status_closing">Closing</string>
+    <string name="garage_status_unknown">Unknown</string>
+    <string name="permission_needed_fine_location">Permission Needed - Fine Location</string>
+    <string name="permission_needed_background_location">Permission Needed - Background Location</string>
+    <string name="permission_fine_location_message">Fine location allows you to see how far you are from your garage to help adjust your geofence perimeter</string>
+    <string name="permission_background_message">Background Location permission allows Smarter Garage to show you a notification to help open and close your garage as you leave or approach your garage, based on your geofence perimeter</string>
+    <string name="smarter_garage_icon">Smarter Garage Icon</string>
+</resources>

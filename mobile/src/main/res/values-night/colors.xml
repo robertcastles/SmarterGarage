@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+<!--    <color name="background">#2B2B2B</color>-->
+<!--    <color name="background_debug">#FF3700B3</color>-->
+    <color name="colorPrimary">#ffffff</color>
+    <color name="textColorHint">#ffffff</color> <!-- text input hint color -->
+    <color name="textColorSecondary">#ffffff</color> <!-- settings summary texts -->
+    <color name="colorAccent">#ffffff</color> <!-- settings title texts -->
+    <color name="border">#B2B2B2</color>
+
+</resources>

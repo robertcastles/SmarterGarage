@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <array name="priority_values">
+        <item>IMPORTANCE_NONE</item>
+        <item>IMPORTANCE_MIN</item>
+        <item>IMPORTANCE_LOW</item>
+        <item>IMPORTANCE_DEFAULT</item>
+        <item>IMPORTANCE_HIGH</item>
+        <item>IMPORTANCE_MAX</item>
+    </array>
+</resources>

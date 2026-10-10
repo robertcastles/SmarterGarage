@@ -1,0 +1,35 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:background="@android:color/transparent"
+    android:viewportWidth="150"
+    android:viewportHeight="150">
+    <path
+        android:name="base"
+        android:fillColor="@color/border"
+        android:pathData="M1.046,137.248h147.95v10.091h-147.95z"
+        android:strokeWidth="1.2144" />
+    <path
+        android:name="house_frame"
+        android:fillColor="@color/border"
+        android:pathData="M15.002,137.24H1.658V34.66L74.647,1.576 148.392,34.408V137.324l-12.333,-0.085v0,-94.425L75.53,16.619 74.32,16.653 15.002,42.815Z"
+        android:strokeWidth="1.21061"
+        android:strokeColor="@color/border"
+        android:strokeLineCap="butt"
+        android:strokeLineJoin="miter" />
+    <path
+        android:name="door_frame"
+        android:fillColor="@color/border"
+        android:pathData="m30.713,54.916c-0.657,1.202 -0.137,2.713 -0.303,4.042 0,25.895 0,51.789 0,77.683 0.333,1.417 2.134,0.657 3.169,0.848 3.743,-0.041 7.515,0.083 11.24,-0.06 1.213,-0.459 0.479,-2.112 0.68,-3.108 0,-21.921 0,-43.843 0,-65.764 20.031,0 40.063,0 60.094,0 0,22.695 0,45.39 0,68.085 0.333,1.417 2.134,0.657 3.169,0.848 3.743,-0.041 7.515,0.083 11.24,-0.06 1.213,-0.459 0.48,-2.112 0.68,-3.108 0,-26.252 0,-52.503 0,-78.755 -0.332,-1.417 -2.133,-0.657 -3.169,-0.848 -28.752,0 -57.504,0 -86.255,0 -0.182,0.066 -0.363,0.132 -0.545,0.198z"
+        android:strokeWidth="0.178596"
+        android:strokeColor="@color/border" />
+    <path
+        android:name="handle"
+        android:fillColor="@color/border"
+        android:pathData="m74.639,75.938c-5.439,-1.138 -7.655,-7.121 -4.097,-11.059 2.289,-2.534 5.848,-3.205 8.934,-1.686 4.231,2.083 5.19,7.399 1.926,10.681 -1.654,1.663 -4.512,2.536 -6.763,2.064z"
+        android:strokeWidth="0.208623" />
+    <path
+        android:name="open_door"
+        android:fillColor="@color/border"
+        android:pathData="m 44.521096,77.399 h 62.369794 v 60.25096 H 44.521096 Z" />
+</vector>

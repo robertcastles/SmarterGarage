@@ -1,0 +1,79 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+/.idea/shelf/
+/.idea/inspectionProfiles/Project_Default.xml
+.DS_Store
+/build
+/sglibrary/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+keystore.properties
+# Android signing keys (including extensionless keystore)
+LusionKeys
+*.jks
+*.keystore
+*.p12
+*.pfx
+/auto/auto/release/mobile-auto-release.aab
+/auto/auto/release/mobile-auto-release.apk
+/auto/debug/mobile-debug.aab
+/auto/release/mobile-release.aab
+/auto/release/mobile-release.apk
+/auto/auto/release/output-metadata.json
+/SmartThingsAPIReadme.txt
+/google-services.json
+/mobile/google-services.json
+/sglibrary/google-services.json
+Project_Default.xml
+/applog.log
+# Kotlin 2.0
+.kotlin/
+
+# Local IDE state can contain credentials, device details, and copied prompts.
+.idea/
+.vs/
+.vscode/
+
+# Generated build output and packaged applications are not source.
+**/build/
+/mobile/release/
+/mobile/auto/
+/mobile/mobile/
+*.apk
+*.aab
+*.apks
+
+# Developer-supplied service configuration and credentials, at any depth.
+google-services.json
+*.pem
+*.key
+*service-account*.json
+*service_account*.json
+*firebase-adminsdk*.json
+.env
+.env.*
+!.env.example
+
+# Diagnostic captures and settings exports may contain personal data or tokens.
+*.log
+/*log*.txt
+/production-*.txt
+smartergarage-settings*.json
+
+# Accidentally downloaded tooling; not part of the application.
+/git-filter-repo
+
+# Optional artwork/screenshots require a separate privacy and licensing review.
+/GooglePlay/
+/design/
+/mobile/src/main/*.png
+/mobile/src/main/backup/

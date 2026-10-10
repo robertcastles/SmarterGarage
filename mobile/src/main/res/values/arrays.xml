@@ -1,0 +1,10 @@
+<resources>
+    <string-array name="hosts_allowlist">
+        <!-- Android Auto (primary signature) -->
+        <item>com.google.android.projection.gearhead:fd669a2180f278c2662fc3002d334005408a2999335508a6b186b51c51d668c2</item>
+        <!-- Android Auto (alternate signature) -->
+        <item>com.google.android.projection.gearhead:fdb00c43dbde8b51cb312aa81d3b5fa17713adb94b28f598d77f8eb89daceedf</item>
+        <!-- Desktop Head Unit (DHU) -->
+        <item>com.google.android.projection.gearhead:788280f63e691ec885c290135d03a11b7a2d61397b91ed0262e3d937000d287a</item>
+    </string-array>
+</resources>

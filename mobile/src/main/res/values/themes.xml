@@ -1,0 +1,18 @@
+<resources>
+
+    <!-- Base application theme. -->
+    <style name="Theme.SmarterGarage" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/colorPrimary</item> <!-- Button Text -->
+        <item name="android:textColorHint">@color/textColorHint</item> <!-- text input hint color -->
+        <item name="android:textColorSecondary">@color/textColorSecondary</item> <!-- settings summary texts -->
+        <item name="colorAccent">@color/colorAccent</item> <!-- settings title texts -->
+        <!-- Primary brand color. -->
+        <!-- Customize your theme here. -->
+    </style>
+
+    <style name="Theme.SmarterGarage.NoActionBar" parent="Theme.SmarterGarage">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+    </style>
+
+</resources>

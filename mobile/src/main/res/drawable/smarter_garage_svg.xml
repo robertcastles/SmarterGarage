@@ -1,0 +1,47 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:background="@android:color/transparent"
+    android:viewportWidth="150"
+    android:viewportHeight="150">
+    <path
+        android:name="front"
+        android:fillColor="#fb0101"
+        android:pathData="M15.002,42.815V137.24H30.739V54.92h89.583v82.319h15.737V42.815l-60.529,-26.196 -1.211,0.034c-59.318,26.162 0,0 -59.318,26.162z"
+        android:strokeWidth="1.21061"
+        android:strokeColor="#00000000" />
+    <path
+        android:name="door"
+        android:fillColor="#fdfdfd"
+        android:pathData="M45.266,68.237V137.24H105.795V68.237Z"
+        android:strokeWidth="1.21061"
+        android:strokeColor="#00000000" />
+    <path
+        android:name="handle"
+        android:fillColor="#000000"
+        android:pathData="M68.712,122.423a7.387,6.945 0,1 0,14.774 0a7.387,6.945 0,1 0,-14.774 0z"
+        android:strokeWidth="1.21061" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M1.046,137.248h147.95v10.091h-147.95z"
+        android:strokeWidth="1.2144" />
+    <path
+        android:name="house_frame"
+        android:fillColor="#000000"
+        android:pathData="M74.147,1.105C50.028,12.041 25.909,22.976 1.79,33.911c-1.14,0.677 -0.577,2.167 -0.712,3.248 -0.021,33.178 -0.042,66.356 -0.062,99.534 0.038,1.084 1.218,1.343 2.101,1.206 3.806,-0.044 7.625,0.003 11.424,-0.095 1.206,-0.126 1.13,-1.533 1.083,-2.439 0.021,-30.719 0.042,-61.439 0.062,-92.158 18.706,-8.222 37.37,-16.543 56.107,-24.686 1.087,-0.396 2.134,-1.031 3.278,-1.206 3.935,1.404 7.72,3.204 11.576,4.809 16.248,7.013 32.485,14.053 48.728,21.078 0.019,31.142 0.04,62.283 0.061,93.425 0.038,1.077 1.208,1.34 2.087,1.215 3.47,-0.002 6.951,0.084 10.414,0.026 1.154,-0.098 1.165,-1.434 1.095,-2.315 -0.018,-33.602 -0.041,-67.203 -0.062,-100.805 -0.147,-1.324 -1.745,-1.415 -2.679,-1.978C122.575,22.216 98.857,11.658 75.139,1.101c-0.338,-0.046 -0.666,-0.165 -0.992,0.003z"
+        android:strokeWidth="0.126265" />
+    <path
+        android:name="garage_frame_wrapper"
+        android:fillColor="#00000000"
+        android:pathData="M45.266,137.24V68.237h60.529v69.003h14.527V54.92H30.739v82.319h14.527"
+        android:strokeWidth="1.21061"
+        android:strokeColor="#000000"
+        android:strokeLineCap="butt"
+        android:strokeLineJoin="miter" />
+    <path
+        android:name="garage_frame"
+        android:fillColor="#000000"
+        android:pathData="m30.713,54.916c-0.657,1.202 -0.137,2.713 -0.303,4.042 0,25.895 0,51.789 0,77.683 0.333,1.417 2.134,0.657 3.169,0.848 3.743,-0.041 7.515,0.083 11.24,-0.06 1.213,-0.459 0.479,-2.112 0.68,-3.108 0,-21.921 0,-43.843 0,-65.764 20.031,0 40.063,0 60.094,0 0,22.695 0,45.39 0,68.085 0.333,1.417 2.134,0.657 3.169,0.848 3.743,-0.041 7.515,0.083 11.24,-0.06 1.213,-0.459 0.48,-2.112 0.68,-3.108 0,-26.252 0,-52.503 0,-78.755 -0.332,-1.417 -2.133,-0.657 -3.169,-0.848 -28.752,0 -57.504,0 -86.255,0 -0.182,0.066 -0.363,0.132 -0.545,0.198z"
+        android:strokeWidth="0.178596"
+        android:strokeColor="#000000" />
+</vector>

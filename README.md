@@ -29,6 +29,10 @@ Oh, it's been a terrible journey getting through Google Play Store policy to get
 
 I should probably publish some material on how to get the smarthings API key. I'll try to add that later.
 
+## Things I want to do
+
+Try to port this to iOS since I'm the only android user in the family.
+
 ## Local development
 
 1. Open this folder in Android Studio.

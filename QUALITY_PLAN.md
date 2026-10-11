@@ -50,6 +50,12 @@ Never retry a door command automatically after uncertain delivery.
   confirmation in service/pulse/status workers and car-connect probe.
 - Privacy milestone: platform backup exclusions, default telemetry collection disabled,
   home-test/privacy documentation; redirects disabled to preserve endpoint boundaries.
+- Auto milestone: watch-until-closed cannot finish on fresh OPEN, cleanup retains the
+  completing observation, screen lifecycle observer registered, delayed refresh cancellable,
+  and screen broadcasts package-scoped. Three additional JVM policy tests pass (14 total).
+- DHU automation: native console runner and Windows OCR; handshake/screenshot smoke
+  test passes on the running AVD. See tools/README.md. Host open/close notification
+  scenarios still need stable calibrated targets and server-side command-count assertions.
 
 ## Remaining work / limitations
 
@@ -61,7 +67,8 @@ Never retry a door command automatically after uncertain delivery.
   complete separation requires a service-owned command queue with acknowledged handoff.
 - Freshness migration is incremental: background-runnable timeout/cleanup and notification
   publication still use cache; add single-flight/generation-aware status publication and
-  retain the exact observation used for final-card confirmation.
+   audit remaining publication paths. Foreground-service final-card confirmation now
+   retains its completing observation.
 - Extract a state repository/ViewModel and immutable location acceptance policy; current
   extractions are NetworkPolicy, CommandExecutor, and StatusFetchResult, not a full rewrite.
 - Add transport integration tests, malformed status/import tests, and location lifecycle tests.
@@ -69,4 +76,5 @@ Never retry a door command automatically after uncertain delivery.
   Export remains plaintext by design. SDK removal/telemetry opt-in needs a separate decision.
 - Audit legacy location-service cleanup, crash-guard recovery, host-validator fallback,
   Kotlin version/configuration flags, and unused resources before making broad deletions.
+
 

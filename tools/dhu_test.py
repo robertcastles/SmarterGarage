@@ -12,6 +12,48 @@ import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
 
 
+def control_center(xml, attribute, label):
+    """Reject ambiguous/missing controls instead of guessing or retrying clicks."""
+    matches = [node for node in ET.fromstring(xml).iter('node')
+        if node.get(attribute) == label]
+    if len(matches) != 1:
+        raise RuntimeError('Expected exactly one Android Auto control: ' + label)
+    bounds = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', matches[0].get('bounds', ''))
+    if not bounds:
+        raise RuntimeError('Invalid Android Auto control bounds')
+    left, top, right, bottom = map(int, bounds.groups())
+    if right <= left or bottom <= top:
+        raise RuntimeError('Empty Android Auto control bounds')
+    return (left + right) // 2, (top + bottom) // 2
+
+
+def start_head_unit_server(device):
+    """Requires already enabled developer mode; never changes onboarding/settings."""
+    path = '/data/local/tmp/sg-dhu-server-ui.xml'
+
+    def snapshot():
+        device('shell', 'uiautomator', 'dump', path)
+        xml = device('shell', 'cat', path)
+        if not any(node.get('package') == 'com.google.android.projection.gearhead'
+            for node in ET.fromstring(xml).iter('node')):
+            raise RuntimeError('Android Auto settings are not visible')
+        return xml
+
+    try:
+        device('shell', 'am', 'start', '-W', '-n',
+            'com.google.android.projection.gearhead/.companion.settings.DefaultSettingsActivity')
+        x, y = control_center(snapshot(), 'content-desc', 'More options')
+        device('shell', 'input', 'tap', str(x), str(y))
+        xml = snapshot()
+        labels = [node.get('text') for node in ET.fromstring(xml).iter('node')]
+        if 'Stop head unit server' not in labels:
+            x, y = control_center(xml, 'text', 'Start head unit server')
+            device('shell', 'input', 'tap', str(x), str(y))
+    finally:
+        device('shell', 'rm', '-f', path)
+        device('shell', 'input', 'keyevent', 'KEYCODE_HOME')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--serial', default='emulator-5554')
@@ -19,6 +61,8 @@ def main():
     parser.add_argument('--scenario', type=Path)
     parser.add_argument('--output', type=Path, default=Path('build/dhu-tests'))
     parser.add_argument('--port', type=int, default=5277)
+    parser.add_argument('--start-head-unit-server', action='store_true',
+        help='Start through the English Android Auto developer menu; developer mode must already be enabled')
     args = parser.parse_args()
     sdk = Path(os.environ.get('ANDROID_HOME') or Path(os.environ['LOCALAPPDATA']) / 'Android/Sdk')
     adb = sdk / 'platform-tools/adb.exe'
@@ -29,7 +73,7 @@ def main():
         raise RuntimeError('DHU configuration does not exist')
 
     def device(*command):
-        return subprocess.check_output([str(adb), '-s', args.serial, *command], text=True)
+        return subprocess.check_output([str(adb), '-s', args.serial, *command], text=True, timeout=60)
 
     # Read preferences privately; never persist or print their content/credentials.
     prefs = ET.fromstring(device('shell', 'run-as', 'com.lusion.sgauto', 'cat',
@@ -52,6 +96,8 @@ def main():
         for pattern in step.get('expect_log', []):
             re.compile(pattern)
 
+    if args.start_head_unit_server:
+        start_head_unit_server(device)
     args.output.mkdir(parents=True, exist_ok=True)
     device('forward', f'tcp:{args.port}', f'tcp:{args.port}')
     messages = queue.Queue()
@@ -160,5 +206,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-
 

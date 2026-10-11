@@ -16,6 +16,19 @@ From the repository root:
 python tools\dhu_test.py --config 'C:\Users\Admin\OneDrive - PMGNET\Desktop\DHU.ini'
 ```
 
+Add `--start-head-unit-server` to start the server through Android Auto's actual
+phone settings menu before connecting. Developer mode must already be enabled and
+the menu must use English labels. Exact unique controls are required; missing or
+ambiguous targets fail rather than guessing. An already running server is not
+toggled. The temporary accessibility dump is removed and the phone returns HOME.
+This option does not complete onboarding or change developer settings.
+
+Command-free host tests (no emulator required):
+
+```powershell
+python -m unittest discover -s tools -p 'test_*.py' -v
+```
+
 This is a **connection/screenshot smoke test**, not an open/close acceptance test.
 Add `--scenario tools\scenarios\auto-launcher.json` for a HOME-key navigation probe.
 The launcher probe is exploratory: it does not assert that the launcher appeared.
@@ -86,8 +99,15 @@ under `build/phone-command-tests`, stops at the first failure, and never retries
 uncertain command automatically. Each successful repetition issues OPEN then CLOSE.
 This validates the phone UI/worker path, **not Android Auto notification routing**.
 
+Verified on the restored AVD on October 11, 2026: all three repetitions passed,
+each with fresh phone confirmation, observed intermediate OPEN, exactly two ordered
+command requests, and final CLOSED. Cleanup left the fixture CLOSED. Assertions
+were not weakened to accommodate the earlier framework/network failure.
+
 - Verified native console handshake, video focus, screenshots, local Windows OCR,
   scripted key/tap dispatch, and clean subprocess shutdown.
+  The restored AVD's head-unit server was stopped; restarting it through the real
+  settings menu restored the command-free DHU connection/screenshot probe.
 - App command scenarios are **not yet calibrated/validated** against this host's
   dynamic launcher/notification layout. No repeated manual clicking is required;
   complete stable OCR targets or use instrumentation for routing/lifecycle coverage.

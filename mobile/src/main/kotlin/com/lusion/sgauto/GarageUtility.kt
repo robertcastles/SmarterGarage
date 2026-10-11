@@ -620,16 +620,20 @@ object GarageUtility {
             lastMonitoringTriggerTime = now
             val appContext = context.applicationContext
             CoroutineScope(Dispatchers.IO).launch {
-                try {
+                val result = try {
                     makeStatusRequest(appContext, ignoreTimers = true, "$source-carConnectProbe")
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.w(TAG, "startCarConnectMonitoring: [$source] fresh probe failed: ${e.message}")
+                    StatusFetchResult.Failed()
                 }
                 // Re-evaluate with whatever the probe just confirmed (updateGarageAppAreas,
                 // invoked from the probe's response handling, updates getLastGarageStatus
                 // and isInsideGeofence's backing preference if a geofence event raced in).
                 val freshStatus = getLastGarageStatus(appContext)
-                if (isInsideGeofence(appContext) || shouldKeepNotificationOnGeofenceExit(freshStatus)) {
+                if (result !is StatusFetchResult.Fresh || result.status != GarageStatus.CLOSED ||
+                    isInsideGeofence(appContext) || shouldKeepNotificationOnGeofenceExit(freshStatus)) {
                     Log.i(TAG, "startCarConnectMonitoring: [$source] fresh probe shows monitoring IS needed (status=$freshStatus) — starting")
                     startMonitoringNow(appContext, source)
                 } else {
@@ -735,7 +739,7 @@ object GarageUtility {
         ignoreTimers: Boolean,
         caller: String,
         callOnce: Boolean
-    ) {
+    ): StatusFetchResult {
         var localMonitorTimeRemaining = monitorTimeRemaining
 
         Log.i(TAG, "monitorGarageStatus: from $caller initialCall $initialCall monitorTimeRemaining, $monitorTimeRemaining ignoreTimers, $ignoreTimers callOnce $callOnce")
@@ -752,8 +756,7 @@ object GarageUtility {
         // updateGarageAppAreas still respects geofence rules for whether to actually
         // show/dismiss the notification once a real status comes back.
         if (callOnce) {
-            makeStatusRequest(context, ignoreTimers, caller)
-            return
+            return makeStatusRequest(context, ignoreTimers, caller)
         }
 
         if (initialCall) {
@@ -768,8 +771,7 @@ object GarageUtility {
             Log.d(TAG, "monitorGarageStatus: _garageActionTimeStamp was 0, set to $garageActionTimeStamp")
         } else if (System.currentTimeMillis() - garageActionTimeStamp < GARAGE_ACTION_POLLING_DELAY) {
             sleep(delayTime, "monitorGarageStatus within _garageActionPollingDelay")
-            monitorGarageStatus(context, false, MAX_GARAGE_POLLING_TIME, ignoreTimers, "MG $caller", false)
-            return
+            return monitorGarageStatus(context, false, MAX_GARAGE_POLLING_TIME, ignoreTimers, "MG $caller", false)
         }
         
         // Continuous (non-callOnce) polling proceeds unconditionally here — see the note
@@ -780,7 +782,7 @@ object GarageUtility {
 
         if (!getAccessKey(context)) {
             Log.w(TAG, "monitorGarageStatus: keys not yet set, returning")
-            return
+            return StatusFetchResult.Failed()
         }
 
         val newMonitorTimeRemaining = localMonitorTimeRemaining - garagePollingTime
@@ -799,7 +801,7 @@ object GarageUtility {
                 gSlowPolling = false
                 garagePollingTime = NORMAL_GARAGE_POLLING_PING_PERIOD
                 gSlowPollingTimeRemaining = MAX_SLOW_POLLING_TIME_WINDOW
-                return
+                return StatusFetchResult.Skipped(StatusFetchResult.Reason.INTERVAL)
             }
         }
 
@@ -809,24 +811,23 @@ object GarageUtility {
 
         if ((getLastGarageStatus(context) == GarageStatus.CLOSING || getLastGarageStatus(context) == GarageStatus.OPENING || getLastGarageStatus(context) == GarageStatus.UNKNOWN) && System.currentTimeMillis() - garageActionTimeStamp < GARAGE_ACTION_POLLING_DELAY) {
             sleep(GARAGE_ACTION_POLLING_DELAY - (System.currentTimeMillis() - garageActionTimeStamp) + 500, "MGS just opened or closed")
-            monitorGarageStatus(context, false, newMonitorTimeRemaining, ignoreTimers, "garage activity delayed call", false)
-            return
+            return monitorGarageStatus(context, false, newMonitorTimeRemaining, ignoreTimers, "garage activity delayed call", false)
         }
 
         resumeFlag = false
 
         if (System.currentTimeMillis() - gLastGarageStatusCheckTime < Constants.GARAGE_POLLING_MINIMUM_RECHECK_TIME) {
-            return
+            return StatusFetchResult.Skipped(StatusFetchResult.Reason.INTERVAL)
         }
 
-        makeStatusRequest(context, ignoreTimers, caller)
+        return makeStatusRequest(context, ignoreTimers, caller)
     }
 
     suspend fun makeStatusRequest(
         context: Context,
         ignoreTimers: Boolean,
         caller: String
-    ) {
+    ): StatusFetchResult {
         resetDnsRetryCountIfNeeded()
 
         // If SmartThings recently rate-limited us (HTTP 429), don't make another
@@ -837,7 +838,7 @@ object GarageUtility {
         // fastest (~1 request/second).
         if (isRateLimited()) {
             Log.w(TAG, "makeStatusRequest: rate-limited by SmartThings, skipping (caller=$caller, ${rateLimitRemainingMs()}ms remaining)")
-            return
+            return StatusFetchResult.Skipped(StatusFetchResult.Reason.RATE_LIMITED)
         }
 
         // Self-throttle BEFORE we ever get a 429: a single poller's fast-phase ticks alone
@@ -845,16 +846,11 @@ object GarageUtility {
         // tick is a no-op; the poller's own loop will try again on its next scheduled tick,
         // so status still converges once the budget frees up — without provoking an actual
         // 429 and its much longer server-imposed backoff.
-        if (!tryReserveRequestSlot()) {
-            Log.w(TAG, "makeStatusRequest: self-throttling to stay under SmartThings' request quota, skipping (caller=$caller, ${msUntilNextRequestSlot()}ms until next slot)")
-            return
-        }
-
         // Only send debug ping AFTER status request completes to avoid concurrent connections
         // that may overwhelm the local server
         Log.i(TAG, "makeStatusRequest: caller $caller")
 
-        if (!validGarageTokens(context)) return
+        if (!validGarageTokens(context)) return StatusFetchResult.Failed()
         val currentTime = System.currentTimeMillis()
 
         if (garageActionTimeStamp == 0L) {
@@ -862,11 +858,11 @@ object GarageUtility {
         }
         if (!ignoreTimers && currentTime - garageActionTimeStamp < GARAGE_ACTION_POLLING_DELAY) {
             Log.w(TAG, "makeStatusRequest: called within _garageActionPollingDelay, returning")
-            return
+            return StatusFetchResult.Skipped(StatusFetchResult.Reason.ACTION_DELAY)
         }
         if (!ignoreTimers && currentTime - garageCheckTimeStamp + 50 < NORMAL_GARAGE_POLLING_PING_PERIOD) {
             Log.w(TAG, "makeStatusRequest: called too fast, returning.")
-            return
+            return StatusFetchResult.Skipped(StatusFetchResult.Reason.INTERVAL)
         }
 
         try {
@@ -877,6 +873,7 @@ object GarageUtility {
 
             val api = SmartThingsService.getInstance(context)
             Log.d(TAG, "makeStatusRequest: hitting $baseUrl")
+            if (!tryReserveRequestSlot()) return StatusFetchResult.Skipped(StatusFetchResult.Reason.BUDGET)
             val response = api.getGarageStatus(garageAccessKey)
 
             when {
@@ -885,16 +882,20 @@ object GarageUtility {
                     // Don't clear recentBgFailureTimes here — let old entries age out
                     // of the sliding window naturally. A single success between throttled
                     // calls shouldn't mask the overall degraded connectivity.
-                    handleGarageStatusResponse(context, response.body()!!)
+                    val result = handleGarageStatusResponse(context, response.body()!!)
                     // Send debug ping AFTER status request completes (sequential, not parallel)
-                    pingDebugServer(context, "makeStatusRequest from $caller completed successfully")
+                    if (result is StatusFetchResult.Fresh) pingDebugServer(context, "makeStatusRequest from $caller completed successfully")
+                    return result
                 }
 
                 else -> {
                     Log.e(TAG, "makeStatusRequest: unsuccessful response from $baseUrl: ${response.code()}")
                     logApiError(context, response, "makeStatusRequest")
+                    return StatusFetchResult.Failed(response.code())
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val debugMode = getPreference("debug_switch", Boolean::class.java, context) as? Boolean == true
             val baseUrl = if (debugMode) (getPreference("debug_server", String::class.java, context) as? String) ?: "https://api.smartthings.com" else "https://api.smartthings.com"
@@ -911,36 +912,41 @@ object GarageUtility {
                 accessError(context, "makeStatusRequest", baseUrl, e)
             }
         }
+        return StatusFetchResult.Failed()
     }
 
     private fun handleGarageStatusResponse(
         context: Context,
         statusResponse: GarageStatusResponse
-    ) {
-        garageCheckTimeStamp = System.currentTimeMillis()
-        gLastGarageStatusCheckTime = System.currentTimeMillis()
-        gLastSuccessfulStatusTime = System.currentTimeMillis() // real data confirmed — drives the notification timestamp
-        consecutiveNetworkErrors = 0 // successful response — reset error streak
-
+    ): StatusFetchResult {
         val status = statusResponse.components.main.doorControl.door.value
+        val currentStatus = GarageStatus.entries.firstOrNull { it.name.equals(status, ignoreCase = true) }
+            ?.takeIf { it != GarageStatus.UNKNOWN } ?: return StatusFetchResult.Failed()
         Log.i(TAG, "handleGarageStatusResponse: Status: $status")
 
         val lastStatus = getLastGarageStatus(context)
+        fun publish(): StatusFetchResult.Fresh {
+            val now = System.currentTimeMillis()
+            garageCheckTimeStamp = now
+            gLastGarageStatusCheckTime = now
+            gLastSuccessfulStatusTime = now
+            consecutiveNetworkErrors = 0
+            updateGarageAppAreas(context, currentStatus)
+            return StatusFetchResult.Fresh(currentStatus, now)
+        }
 
         when (status.lowercase()) {
             "opening" -> {
-                updateGarageAppAreas(context, GarageStatus.OPENING)
                 if (lastStatus != GarageStatus.OPENING) {
                     gStartFastLoop = true
                 }
-                return
+                return publish()
             }
             "closing" -> {
-                updateGarageAppAreas(context, GarageStatus.CLOSING)
                 if (lastStatus != GarageStatus.CLOSING) {
                     gStartFastLoop = true
                 }
-                return
+                return publish()
             }
         }
 
@@ -952,17 +958,11 @@ object GarageUtility {
             if (lastStatus == GarageStatus.OPENING || lastStatus == GarageStatus.CLOSING) {
                 Log.i(TAG, "handleGarageStatusResponse: Within action delay window, keeping transitional state: $lastStatus (API returned: $status)")
                 gStartFastLoop = true
-                return
+                return StatusFetchResult.Skipped(StatusFetchResult.Reason.ACTION_WINDOW_SUPPRESSED)
             }
         }
 
-        val currentStatus = try {
-            GarageStatus.valueOf(status.uppercase())
-        } catch (_: Exception) {
-            GarageStatus.UNKNOWN
-        }
-
-        updateGarageAppAreas(context, currentStatus)
+        return publish()
     }
 
     fun getLastGarageStatus(context: Context): GarageStatus {

@@ -68,22 +68,21 @@ class GaragePulseWorker(
         var success = false
         for (attempt in 1..MAX_ATTEMPTS) {
             Log.d(TAG, "Poll attempt $attempt/$MAX_ATTEMPTS")
-            GarageUtility.makeStatusRequest(
+            val result = GarageUtility.makeStatusRequest(
                 applicationContext,
                 ignoreTimers = true,
                 caller = "PulseWorker-$attempt"
             )
 
-            val status = GarageUtility.getLastGarageStatus(applicationContext)
-            if (status != GarageStatus.UNKNOWN) {
-                Log.i(TAG, "Got valid status: $status on attempt $attempt")
+            if (result is StatusFetchResult.Fresh) {
+                Log.i(TAG, "Got fresh status: ${result.status} on attempt $attempt")
                 success = true
                 break
             }
 
             if (attempt < MAX_ATTEMPTS) {
                 Log.d(TAG, "Status UNKNOWN, retrying in ${RETRY_DELAY_MS}ms...")
-                kotlinx.coroutines.delay(RETRY_DELAY_MS.milliseconds)
+                kotlinx.coroutines.delay(maxOf(RETRY_DELAY_MS, GarageUtility.msUntilNextRequestSlot(), GarageUtility.rateLimitRemainingMs()).milliseconds)
             }
         }
 
@@ -98,7 +97,7 @@ class GaragePulseWorker(
             Log.w(TAG, "Pulse completed without successful status fetch")
         }
 
-        return Result.success()
+        return if (success) Result.success() else Result.failure()
     }
 
     private fun createForegroundInfo(): ForegroundInfo {

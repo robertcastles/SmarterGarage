@@ -200,7 +200,7 @@ class GarageAutoForegroundService : Service() {
 
                     // Make the status request DIRECTLY in the foreground service scope
                     Log.d(TAG, "Polling #${++pollCount} at ${elapsed}ms")
-                    GarageUtility.makeStatusRequest(
+                    val result = GarageUtility.makeStatusRequest(
                         applicationContext,
                         ignoreTimers = true, // We control our own timing
                         caller = "FGService-poll-$pollCount"
@@ -208,9 +208,10 @@ class GarageAutoForegroundService : Service() {
 
                     // Check garage state to decide polling speed and whether to stop
                     val status = GarageUtility.getLastGarageStatus(applicationContext)
-                    val isTransitional = status == GarageStatus.OPENING || status == GarageStatus.CLOSING
-                    val isFinal = status == GarageStatus.OPEN || status == GarageStatus.CLOSED
-                    val isUnknown = status == GarageStatus.UNKNOWN
+                    val observed = (result as? StatusFetchResult.Fresh)?.status
+                    val isTransitional = observed == GarageStatus.OPENING || observed == GarageStatus.CLOSING
+                    val isFinal = observed == GarageStatus.OPEN || observed == GarageStatus.CLOSED
+                    val isUnknown = result is StatusFetchResult.Failed
                     System.currentTimeMillis() - GarageUtility.garageActionTimeStamp
 
                     if (isTransitional) {
@@ -282,7 +283,7 @@ class GarageAutoForegroundService : Service() {
                     // slot will actually be available just wakes us up to silently skip a
                     // throttled request. Sleep at least until the next slot frees up.
                     val budgetWaitMs = GarageUtility.msUntilNextRequestSlot()
-                    val finalDelay = maxOf(adjustedDelay, budgetWaitMs)
+                    val finalDelay = maxOf(adjustedDelay, budgetWaitMs, GarageUtility.rateLimitRemainingMs())
                     if (budgetWaitMs > adjustedDelay) {
                         Log.d(TAG, "Pacing to request budget: waiting ${finalDelay}ms (budget frees in ${budgetWaitMs}ms) instead of ${adjustedDelay}ms")
                     }

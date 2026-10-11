@@ -62,7 +62,7 @@ class GarageStatusWorker(
         val maxAttempts = if (isFastPoll) 1 else 4 // Fast polls only try once
 
         while (attempt <= maxAttempts) {
-            monitorGarageStatus(
+            val result = monitorGarageStatus(
                 applicationContext,
                 true,
                 MAX_GARAGE_POLLING_TIME,
@@ -84,14 +84,15 @@ class GarageStatusWorker(
                     Log.d(TAG, "Max fast polls ($MAX_FAST_POLLS) reached, transitional state may not resolve: $status")
                 }
                 break
-            } else if (isFastPoll) {
+            } else if (isFastPoll && result is StatusFetchResult.Fresh &&
+                (result.status == GarageStatus.OPEN || result.status == GarageStatus.CLOSED)) {
                 // Reached final state during fast polling, cancel any pending fast polls
                 cancelFastPolls()
                 Log.d(TAG, "Final state reached during fast poll: $status")
                 break
             }
 
-            if (status != GarageStatus.UNKNOWN) {
+            if (result is StatusFetchResult.Fresh) {
                 break
             }
 

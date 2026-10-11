@@ -44,8 +44,8 @@ disconnect DHU; reconnection is part of each run.
 ### Android UI Automator
 
 Device tests use AndroidJUnitRunner and catalog-managed UI Automator dependencies.
-They require an already configured local fake-server emulator and never tap a door
-command or change settings. Resuming the app can still poll and register geofences.
+The smoke tests require an already configured local fake-server emulator and never
+tap a door command or change settings. Resuming the app can still poll and register geofences.
 
 ```powershell
 .\gradlew.bat :mobile:connectedDebugAndroidTest
@@ -64,6 +64,28 @@ be driven through UI Automator's accessibility tree; it is not an app regression
 Probe diagnostics use the `SGUiAutomator` log tag and omit text/credentials/location.
 Use UI Automator for phone/SystemUI tests and DHU console/OCR for host clicks.
 
+### Counted phone OPEN/CLOSE test
+
+`PhoneCommandTest` is skipped by ordinary instrumentation runs unless explicitly
+opted in. Run it through the host orchestrator, which validates local fake routing,
+rejects a connected DHU, resets the fixture, monitors the intermediate OPEN state,
+and requires exactly two ordered command POSTs plus successful device assertions.
+No cached state is manufactured and no direct test API poll substitutes for app polling.
+
+Start the deterministic simulator from `C:\projects\SmarterGarageAPI` per its README,
+disconnect DHU, and use an already provisioned fake-only AVD. Build/install both
+`:mobile:assembleDebug` and `:mobile:assembleDebugAndroidTest` APKs first, then:
+
+```powershell
+python tools\phone_command_test.py --repeat 3
+```
+
+The runner force-stops the app before/after each cycle without clearing settings.
+It resets the fixture to CLOSED after execution, records only nonsecret summaries
+under `build/phone-command-tests`, stops at the first failure, and never retries an
+uncertain command automatically. Each successful repetition issues OPEN then CLOSE.
+This validates the phone UI/worker path, **not Android Auto notification routing**.
+
 - Verified native console handshake, video focus, screenshots, local Windows OCR,
   scripted key/tap dispatch, and clean subprocess shutdown.
 - App command scenarios are **not yet calibrated/validated** against this host's
@@ -72,4 +94,5 @@ Use UI Automator for phone/SystemUI tests and DHU console/OCR for host clicks.
 - Instrumentation that sends an existing PendingIntent can test AUTO routing but
   cannot prove the real host's foreground-service-start exemption. Keep at least
   one DHU host-click scenario for end-to-end acceptance.
+
 

@@ -69,6 +69,13 @@ Never retry a door command automatically after uncertain delivery.
   Simulator changes remain uncommitted because that repository has owner edits already
   in progress; startup/API/test instructions are in its README. Next: wire these controls
   into asserted device/DHU scenarios (no end-to-end Auto cycle claimed yet).
+- Counted phone automation implemented: opt-in UI Automator OPEN/CLOSE test requires
+  fresh normal app polling and unique phone controls; host runner owns reset, generation,
+  intermediate OPEN, exact ordered command counts, repetition, and bounded cleanup.
+  Debug app/test APKs compile. Device execution is not passed: initial polling timed out
+  before commands; subsequent ADB operations stalled and Android activity service became
+  unavailable. No commands accepted. Restore AVD framework/network health before rerunning;
+  runner now rejects an unready framework. No freshness assertions were weakened.
 
 ## Remaining work / limitations
 
@@ -89,6 +96,7 @@ Never retry a door command automatically after uncertain delivery.
   Export remains plaintext by design. SDK removal/telemetry opt-in needs a separate decision.
 - Audit legacy location-service cleanup, crash-guard recovery, host-validator fallback,
   Kotlin version/configuration flags, and unused resources before making broad deletions.
+
 
 
 

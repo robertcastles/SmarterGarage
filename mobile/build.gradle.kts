@@ -20,7 +20,7 @@ android {
         // we're ready. Suppress the advisory "not targeting latest SDK" lint.
         //noinspection OldTargetApi,GradleDependency,ExpiredTargetSdkVersion
         targetSdk = 36
-        versionCode = 575
+        versionCode = 576
         versionName = "2025.${versionCode}"
 //        testInstrumentationRunner ("androidx.test.runner.AndroidJUnitRunner")
     }
@@ -54,7 +54,7 @@ android {
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
-                storeFile = rootProject.file(requireNotNull(releaseStoreFile))
+                storeFile = rootProject.file(releaseStoreFile)
                 storePassword = releaseStorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeyPassword

@@ -13,6 +13,10 @@
     <string name="garage_fg_service_channel_name">Garage Monitoring Service</string>
     <string name="garage_fg_service_channel_desc">Shown briefly while actively checking your garage status</string>
     <string name="garage_monitoring">Checking garage status…</string>
+    <string name="garage_auto_channel_id">garage_auto_status</string>
+    <string name="garage_auto_channel_name">Android Auto Status</string>
+    <string name="garage_auto_channel_desc">Silent status carrier shown while Android Auto is connected</string>
+    <string name="garage_auto_status_title">Android Auto garage status</string>
     <!-- Arrival heads-up: a high-importance one-shot notification that "peeks" on the
          Android Auto screen when you enter the geofence, surfacing OPEN/CLOSE without
          needing to open the app. Auto-dismisses shortly after. -->

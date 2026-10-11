@@ -32,7 +32,8 @@ object NotificationBuilder {
         importance: Int,
         carNotificationTitle: String,
         headsUp: Boolean = false,
-        headsUpChannelId: String? = null
+        headsUpChannelId: String? = null,
+        autoCarrier: Boolean = false
     ): NotificationCompat.Builder {
         var icon1 = R.drawable.garage_door_closing_arrow
         var icon2 = R.drawable.garage_door_opening_arrow
@@ -70,6 +71,7 @@ object NotificationBuilder {
         // convert string to priority value
         val priorityValue = when {
             headsUp -> NotificationCompat.PRIORITY_HIGH
+            autoCarrier -> NotificationCompat.PRIORITY_LOW
             notificationPriority == "IMPORTANCE_MIN" -> NotificationCompat.PRIORITY_MIN
             notificationPriority == "IMPORTANCE_LOW" -> NotificationCompat.PRIORITY_LOW
             notificationPriority == "IMPORTANCE_DEFAULT" -> NotificationCompat.PRIORITY_DEFAULT
@@ -80,11 +82,23 @@ object NotificationBuilder {
 
         // Heads-up (arrival) posts use a dedicated high-importance channel so the host
         // "peeks" them; the normal status card keeps its user-selected priority channel.
-        val channelId = headsUpChannelId ?: "${context.getString(R.string.garage_notification)}_$notificationPriority"
-        createNotificationChannel(context, channelId, importance)
+        val channelId = if (autoCarrier) context.getString(R.string.garage_auto_channel_id)
+            else headsUpChannelId ?: "${context.getString(R.string.garage_notification)}_$notificationPriority"
+        if (autoCarrier) {
+            val channel = NotificationChannel(channelId,
+                context.getString(R.string.garage_auto_channel_name), NotificationManager.IMPORTANCE_LOW).apply {
+                description = context.getString(R.string.garage_auto_channel_desc)
+                setShowBadge(false)
+                setSound(null, null)
+                enableVibration(false)
+            }
+            context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        } else {
+            createNotificationChannel(context, channelId, importance)
+        }
 
         // set notification title to current time to force Android Auto to update icon on new notifications
-        return NotificationCompat.Builder(context, context.getString(R.string.garage_notification))
+        val builder = NotificationCompat.Builder(context, context.getString(R.string.garage_notification))
 //        return NotificationCompat.Builder(context, nowString())
             .setContentTitle(garageStatus!!.name)
             .setContentText(CONTENT_TEXT)
@@ -101,8 +115,9 @@ object NotificationBuilder {
             .setAutoCancel(headsUp)
             .setOngoing(!headsUp)
             .setCategory(CATEGORY_EVENT)
+            .setLocalOnly(!headsUp && !autoCarrier)
             .apply {
-                if (!headsUp) {
+                if (!headsUp && !autoCarrier) {
                     setGroup(GarageNotificationGroup.GROUP_KEY)
                     setSortKey("00_garage")
                     setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
@@ -117,7 +132,18 @@ object NotificationBuilder {
             ) //                .setStyle(new NotificationCompat.DecoratedCustomViewStyle())
             //                .setCustomContentView(notificationLayout)
             //                .setCustomBigContentView(notificationLayoutExpanded)
-            .extend(
+        if (autoCarrier) {
+            // The carrier may appear on the phone too, but it is not another controls
+            // card or a child of the phone status/monitor group.
+            builder.setContentTitle(context.getString(R.string.garage_auto_status_title))
+                .setContentText(notificationText)
+                .setCustomContentView(null)
+                .setStyle(null)
+                .clearActions()
+                .setOnlyAlertOnce(true)
+        }
+        if (headsUp || autoCarrier) {
+            builder.extend(
                 CarAppExtender.Builder()
                     .setContentTitle(carNotificationTitle)
 //                    .setContentTitle(nowString())
@@ -145,6 +171,8 @@ object NotificationBuilder {
                     .addAction(icon2, title2, autoPendingIntent2!!)
                     .setImportance(importance).build()
             )
+        }
+        return builder
     }
 
     private fun createNotificationChannel(context: Context, channelId: String, importance: Int) {

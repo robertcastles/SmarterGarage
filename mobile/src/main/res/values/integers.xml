@@ -4,6 +4,7 @@
     <integer name="garage_fg_service_notification_id">2</integer>
     <integer name="garage_arrival_notification_id">3</integer>
     <integer name="garage_status_summary_notification_id">4</integer>
+    <integer name="garage_auto_notification_id">5</integer>
     <integer name="garage_pulse_notification_id">9003</integer>
     <integer name="broadcast_request_code">4688</integer>
 </resources>

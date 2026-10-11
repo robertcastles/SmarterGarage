@@ -40,14 +40,15 @@ object NotificationUtility {
     private val carRefreshSequence = AtomicInteger()
     /** Last status posted while an AA host was connected; repeated polls must not bounce its card. */
     @Volatile private var lastCarPostedStatus: GarageStatus? = null
+    private var pendingCarStatus: GarageStatus? = null
 
     /**
      * Android Auto (current versions) does NOT re-render a notification that is updated
      * in place — it only draws the state present when the card is freshly ADDED. To change
      * the visible state we must cancel (remove) then re-notify (add). This is done on a
      * short gap so the host reliably observes the removal before the re-add. Because the
-     * foreground service now uses its own separate notification id, this cancel/notify no
-     * longer races a concurrent startForeground, so it lands reliably.
+     * Auto carrier has its own identity, this never removes the phone controls or
+     * either foreground monitor notification.
      */
     private const val AA_RECREATE_GAP_MS = 300L
     private val carPostScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -71,7 +72,8 @@ object NotificationUtility {
         garageStatus: GarageStatus?
     ) {
 
-        var localGarageStatus = garageStatus
+        val localGarageStatus = if (updateType == UpdateType.GEOFENCE) getLastGarageStatus(context)
+            else garageStatus ?: getLastGarageStatus(context)
         // if we are getting repeated calls to trigger the notification with the same info, just return
         if (localGarageStatus == GarageStatus.UNKNOWN && System.currentTimeMillis() - gLastGarageStatusCheckTime > MAX_MEDIUM_POLLING_TIME_WINDOW) ongoingGarageStatusThread(
             context,
@@ -83,6 +85,7 @@ object NotificationUtility {
         // dropped it (Samsung throttling / frozen process), the cached "last status"
         // can disagree with what the user sees — so we must always re-post to resync.
         val notificationVisible = isGarageNotificationActive(context)
+        val carNeedsRecovery = LusionUtility.isInCarSession && !isAutoNotificationActive(context)
 
         // ---- Hard global rate-limit (prevents Samsung-visible notification spam) ----
         // GARAGESTATUS updates carry fresh data from the API and must not be blocked
@@ -90,7 +93,9 @@ object NotificationUtility {
         // The floor is only enforced while the notification is actually visible; if it
         // was dropped we bypass the floor to guarantee the user sees the current state.
         val effectiveFloor = if (updateType == UpdateType.GARAGESTATUS) 300L else NOTIFICATION_MIN_INTERVAL_MS
-        if (notificationVisible && now - lastNotifyPostTimeMs < effectiveFloor) {
+        if (notificationVisible && !carNeedsRecovery &&
+            localGarageStatus == getLastNotificationStatus(context) &&
+            now - lastNotifyPostTimeMs < effectiveFloor) {
             Log.d(TAG, "triggerNotification: global rate-limit, skipping ($updateType)")
             return
         }
@@ -99,8 +104,8 @@ object NotificationUtility {
         val timeDiff = now - lastStatusTime
 
         // OPENING/CLOSING are short-lived, actively-watched states — the user wants to
-        // see the notification visibly refresh (title-toggle hack forces Android Auto
-        // to redraw) on every poll during the transition, not just once at the start.
+        // see fresh phone timestamps on transition polls. Auto independently recreates
+        // its carrier when the status changes or a lifecycle refresh is requested.
         // Batch notification updates for STABLE states (OPEN/CLOSED/UNKNOWN): use a
         // longer skip time in car session to reduce Android Auto throttling.
         val isTransitional = localGarageStatus == GarageStatus.OPENING || localGarageStatus == GarageStatus.CLOSING
@@ -113,31 +118,27 @@ object NotificationUtility {
 
         // Only skip the repeat post when the status is unchanged AND the notification
         // is still actually on screen. A dropped notification must always be re-posted.
-        if (isStatusUnchanged && timeDiff < skipThreshold && notificationVisible) {
+        if (isStatusUnchanged && timeDiff < skipThreshold && notificationVisible && !carNeedsRecovery) {
             Log.i(TAG, "triggerNotification: repeat, skipping (type=$updateType, car=${LusionUtility.isInCarSession}, threshold=${skipThreshold}ms)")
             return
         }
         Log.i(TAG, "triggerNotification: $updateType $localGarageStatus (car=${LusionUtility.isInCarSession})")
 
-        // Update this status card in place. Cancelling first causes Android Auto to
-        // visibly remove and recreate the card during each transition poll.
-        // Resolve the status we actually displayed for bookkeeping (GEOFENCE uses last known)
-        if (updateType == UpdateType.GEOFENCE) localGarageStatus = getLastGarageStatus(context)
+        // Update phone controls in place; independently recreate only the Auto carrier.
         postGarageNotificationToCar(context, updateType, localGarageStatus)
         lastNotifyPostTimeMs = System.currentTimeMillis()
-        setLastNotificationStatus(context, localGarageStatus!!)
+        setLastNotificationStatus(context, localGarageStatus)
     }
 
-    /** The notification id used exclusively for the garage phone/Android Auto status card. */
+    /** Stable phone garage-controls identity; never canceled merely to refresh Auto. */
     fun garageNotificationId(context: Context): Int =
         context.resources.getInteger(R.integer.garage_notification_id)
 
+    private fun autoNotificationId(context: Context): Int =
+        context.resources.getInteger(R.integer.garage_auto_notification_id)
+
     /**
-     * Builds the garage-status notification (status text, icon, Open/Close action
-     * buttons and the Android Auto extender) WITHOUT posting it.
-     *
-     * Used by normal status-card posts and foreground-service promotion. The service
-     * detaches ownership before its final Android Auto refresh, retaining one phone card.
+     * Builds the phone garage controls without posting or foreground ownership.
      */
     @SuppressLint("MissingPermission")
     fun buildGarageNotification(
@@ -146,14 +147,15 @@ object NotificationUtility {
         garageStatus: GarageStatus?
     ): android.app.Notification = buildGarageNotificationBuilder(context, updateType, garageStatus).build()
 
-    /** Builds the shared phone/Android Auto notification without posting it. */
+    /** Builds phone controls, an Auto carrier, or an independent arrival heads-up. */
     @SuppressLint("MissingPermission")
     fun buildGarageNotificationBuilder(
         context: Context,
         updateType: UpdateType,
         garageStatus: GarageStatus?,
         carNotificationTitle: String = garageStatus?.name ?: "Smarter Garage",
-        headsUp: Boolean = false
+        headsUp: Boolean = false,
+        autoCarrier: Boolean = false
     ): androidx.core.app.NotificationCompat.Builder {
         var localGarageStatus = garageStatus
 
@@ -265,7 +267,8 @@ object NotificationUtility {
             importance,
             carNotificationTitle,
             headsUp = headsUp,
-            headsUpChannelId = if (headsUp) context.getString(R.string.garage_arrival_channel_id) else null
+            headsUpChannelId = if (headsUp) context.getString(R.string.garage_arrival_channel_id) else null,
+            autoCarrier = autoCarrier
         )
         return builder
     }
@@ -336,7 +339,7 @@ object NotificationUtility {
     /**
      * Re-posts the current status when an Android Auto host attaches. The phone notification
      * may already be visible and therefore be skipped by its normal duplicate/rate-limit logic,
-     * but a newly attached car host still needs the full CarAppExtender payload.
+     * but a newly attached car host still needs its separate CarAppExtender carrier.
      */
     @SuppressLint("MissingPermission")
     fun refreshForCarSession(context: Context) {
@@ -345,6 +348,7 @@ object NotificationUtility {
             GarageUtility.shouldKeepNotificationOnGeofenceExit(status)
         if (!shouldBeVisible) {
             Log.i(TAG, "refreshForCarSession: notification is intentionally hidden (status=$status)")
+            dismissNotification(context)
             return
         }
 
@@ -355,11 +359,11 @@ object NotificationUtility {
     }
 
     /**
-     * Posts/updates the shared garage STATUS card (id=1) for a known status, honoring the
+     * Updates the phone STATUS card (id=1) in place for a known status, honoring the
      * geofence visibility rule. Used by the foreground service to eagerly reflect an accepted
      * OPEN/CLOSE (moving state) and to confirm the final state — the service no longer owns
      * this notification id, so it just asks NotificationUtility to (re)post it like any other
-     * status update. In a car session this routes through the AA in-place update path.
+     * status update. Only the separate Auto carrier uses cancel/recreate.
      */
     @SuppressLint("MissingPermission")
     fun postGarageStatusCard(context: Context, status: GarageStatus) {
@@ -367,6 +371,7 @@ object NotificationUtility {
             GarageUtility.shouldKeepNotificationOnGeofenceExit(status)
         if (!shouldBeVisible) {
             Log.i(TAG, "postGarageStatusCard: notification is intentionally hidden (status=$status)")
+            dismissNotification(context)
             return
         }
         Log.i(TAG, "postGarageStatusCard: posting status=$status")
@@ -376,12 +381,8 @@ object NotificationUtility {
     }
 
     /**
-     * Posts the garage status to Android Auto. Current AA versions do NOT re-render a
-     * notification updated in place — they only draw the state present when the card is
-     * freshly added — so in a car session this cancels then re-posts the card after a short
-     * gap ([AA_RECREATE_GAP_MS]) to force the new state to draw. Off-car it updates in place
-     * so the phone card never flickers. The FG service uses its own separate notification id,
-     * so this cancel/notify no longer races a startForeground and lands reliably.
+     * Phone controls always update in place. Auto has an independent identity so its
+     * cancel/recreate workaround cannot remove the phone controls or affect grouping.
      */
     @SuppressLint("MissingPermission")
     @Synchronized
@@ -391,73 +392,74 @@ object NotificationUtility {
         garageStatus: GarageStatus?,
         forceLifecycleRefresh: Boolean = false
     ): android.app.Notification? {
-        val isCarSession = LusionUtility.isInCarSession
-        val statusChangedForCar = garageStatus != lastCarPostedStatus
-        // While an AA host is connected, an unchanged-status re-post would be deduped by the
-        // host anyway; skip it unless a caller explicitly forces a redraw (host attach,
-        // foreground handoff, or an actively-watched transition poll).
-        //
-        // BUT only skip when the card is ACTUALLY still on screen. lastCarPostedStatus is an
-        // in-memory value that survives a geofence EXIT dismissing the notification (and any
-        // system drop), so trusting it alone silently skips the re-post the user needs on the
-        // next geofence ENTER when the status happens to be unchanged (e.g. CLOSED -> away ->
-        // back, still CLOSED) — leaving no notification at all after arriving home.
-        if (isCarSession && !forceLifecycleRefresh && !statusChangedForCar &&
-            isGarageNotificationActive(context)
-        ) {
-            Log.i(TAG, "postGarageNotificationToCar: AA status unchanged ($garageStatus) and still visible, skipping")
+        val appContext = context.applicationContext
+        val status = if (updateType == UpdateType.GEOFENCE) getLastGarageStatus(appContext)
+            else garageStatus ?: getLastGarageStatus(appContext)
+        if (!GarageUtility.isInsideGeofence(appContext) &&
+            !GarageUtility.shouldKeepNotificationOnGeofenceExit(status)) {
+            dismissNotification(appContext)
             return null
         }
 
-        val sequence = carRefreshSequence.getAndIncrement()
-        val carTitle = if (sequence and 1 == 0) "Smarter Garage" else "Smarter Garage "
-        val notificationId = garageNotificationId(context)
-        val carNotificationManager = CarNotificationManager.from(context)
-        val notificationBuilder = buildGarageNotificationBuilder(context, updateType, garageStatus, carTitle)
-        if (isCarSession) {
-            // AA won't re-render an in-place update, so remove then re-add after a short gap.
-            // Only the latest scheduled re-post fires (token guard), so intermediate states
-            // during rapid changes don't briefly flash.
-            val myToken = carPostToken.incrementAndGet()
-            Log.i(TAG, "postGarageNotificationToCar: AA cancel+recreate seq=$sequence, status=$garageStatus, force=$forceLifecycleRefresh, token=$myToken")
-            synchronized(GarageNotificationGroup) {
-                GarageNotificationGroup.statusRefreshPending()
-                carNotificationManager.cancel(notificationId)
-            }
-            carPostScope.launch {
-                delay(AA_RECREATE_GAP_MS)
-                synchronized(this@NotificationUtility) {
-                    if (carPostToken.get() == myToken) {
-                        synchronized(GarageNotificationGroup) {
-                            carNotificationManager.notify(notificationId, notificationBuilder)
-                            GarageNotificationGroup.statusPosted(context, notificationBuilder.build())
-                        }
-                        Log.i(TAG, "postGarageNotificationToCar: AA re-posted status=$garageStatus (token=$myToken)")
-                    } else {
-                        Log.i(TAG, "postGarageNotificationToCar: AA re-post superseded (token=$myToken)")
-                    }
-                }
-            }
-            lastCarPostedStatus = garageStatus
-        } else {
-            // Phone updates in place fine and must not flicker, so no cancel off-car.
-            Log.i(TAG, "postGarageNotificationToCar: in-place phone update seq=$sequence, status=$garageStatus")
-            carPostToken.incrementAndGet()
-            synchronized(GarageNotificationGroup) {
-                carNotificationManager.notify(notificationId, notificationBuilder)
-                GarageNotificationGroup.statusPosted(context, notificationBuilder.build())
-            }
+        val phoneNotification = buildGarageNotificationBuilder(appContext, updateType, status).build()
+        synchronized(GarageNotificationGroup) {
+            NotificationManagerCompat.from(appContext).notify(garageNotificationId(appContext), phoneNotification)
+            GarageNotificationGroup.statusPosted(appContext, phoneNotification)
         }
         lastNotifyPostTimeMs = System.currentTimeMillis()
-        garageStatus?.let { setLastNotificationStatus(context, it) }
-        return notificationBuilder.build()
+        setLastNotificationStatus(appContext, status)
+
+        if (!LusionUtility.isInCarSession) {
+            clearCarSessionNotification(appContext)
+            return phoneNotification
+        }
+        // Do not let Auto deduplication suppress phone timestamp/action updates. Also
+        // avoid restarting the gap for repeated polls of a state already pending.
+        if (pendingCarStatus == status || (!forceLifecycleRefresh && pendingCarStatus == null &&
+                lastCarPostedStatus == status && isAutoNotificationActive(appContext))) {
+            return phoneNotification
+        }
+        val sequence = carRefreshSequence.getAndIncrement()
+        val carTitle = if (sequence and 1 == 0) "Smarter Garage" else "Smarter Garage "
+        val autoBuilder = buildGarageNotificationBuilder(appContext, updateType, status,
+            carNotificationTitle = carTitle, autoCarrier = true)
+        val manager = CarNotificationManager.from(appContext)
+        val myToken = carPostToken.incrementAndGet()
+        pendingCarStatus = status
+        manager.cancel(autoNotificationId(appContext))
+        Log.i(TAG, "Auto carrier cancel+recreate: status=$status, token=$myToken")
+        carPostScope.launch {
+            delay(AA_RECREATE_GAP_MS)
+            synchronized(this@NotificationUtility) {
+                if (carPostToken.get() != myToken) return@synchronized
+                pendingCarStatus = null
+                if (!LusionUtility.isInCarSession ||
+                    (!GarageUtility.isInsideGeofence(appContext) &&
+                        !GarageUtility.shouldKeepNotificationOnGeofenceExit(status))) {
+                    clearCarSessionNotification(appContext)
+                    return@synchronized
+                }
+                manager.notify(autoNotificationId(appContext), autoBuilder)
+                lastCarPostedStatus = status
+                Log.i(TAG, "Auto carrier re-posted: status=$status, token=$myToken")
+            }
+        }
+        return phoneNotification
+    }
+
+    /** Disconnect cleanup must never remove phone controls or foreground monitors. */
+    @Synchronized
+    fun clearCarSessionNotification(context: Context) {
+        carPostToken.incrementAndGet()
+        pendingCarStatus = null
+        lastCarPostedStatus = null
+        NotificationManagerCompat.from(context).cancel(autoNotificationId(context))
     }
 
     @Synchronized
     fun dismissNotification(context: Context) {
         Log.e(TAG, "dismissNotification")
-        carPostToken.incrementAndGet()
-        lastCarPostedStatus = null
+        clearCarSessionNotification(context)
         synchronized(GarageNotificationGroup) {
             NotificationManagerCompat.from(context).cancel(garageNotificationId(context))
             GarageNotificationGroup.dismissSummary(context)
@@ -473,9 +475,15 @@ object NotificationUtility {
      * existing rate-limiting behavior.
      */
     fun isGarageNotificationActive(context: Context): Boolean {
+        return isNotificationActive(context, garageNotificationId(context))
+    }
+
+    private fun isAutoNotificationActive(context: Context): Boolean =
+        isNotificationActive(context, autoNotificationId(context))
+
+    private fun isNotificationActive(context: Context, id: Int): Boolean {
         return try {
             val nm = context.getSystemService(NotificationManager::class.java)
-            val id = context.resources.getInteger(R.integer.garage_notification_id)
             nm.activeNotifications.any { it.id == id }
         } catch (e: Exception) {
             Log.w(TAG, "isGarageNotificationActive check failed: ${e.message}")
@@ -486,15 +494,13 @@ object NotificationUtility {
     /**
      * Refreshes the notification based on geofence rules:
      * - If inside geofence: show the notification with current garage status
-     * - If outside geofence: dismiss the notification, UNLESS the last known garage
-     *   status isn't CLOSED (i.e. OPEN/OPENING/CLOSING/UNKNOWN) — in that case keep
-     *   showing it so the user doesn't lose track of a garage that isn't confirmed
-     *   closed. This MUST match GeofenceBroadcastReceiver.handleTransition()'s EXIT
+     * - If outside geofence: keep only confirmed OPEN/OPENING/CLOSING; dismiss CLOSED
+     *   and UNKNOWN. This MUST match GeofenceBroadcastReceiver.handleTransition()'s EXIT
      *   logic exactly: this function is called periodically (GarageStatusWorker's
      *   15-minute worker, GaragePulseWorker) independent of the actual EXIT event, so
      *   if the two disagreed, one would silently override the other's decision the
      *   next time either ran — e.g. the receiver deliberately keeps the notification
-     *   visible for an OPEN/UNKNOWN garage, only for this function to force-dismiss it
+     *   visible for an OPEN garage, only for this function to force-dismiss it
      *   minutes later regardless of status.
      * This function always acts regardless of whether the status changed.
      */

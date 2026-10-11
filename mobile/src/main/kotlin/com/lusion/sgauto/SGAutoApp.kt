@@ -68,6 +68,9 @@ class SGAutoApp : Application() {
                     // Update global car session state for tiered polling
                     LusionUtility.isInCarSession = isNowConnected
                     Log.i(TAG, "isInCarSession set to: ${LusionUtility.isInCarSession}")
+                    if (!isNowConnected) {
+                        NotificationUtility.clearCarSessionNotification(applicationContext)
+                    }
 
                     if (isNowConnected && !wasConnected) {
                         Log.i(TAG, "Car connection established! Triggering garage status refresh...")

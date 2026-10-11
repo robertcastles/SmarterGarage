@@ -25,7 +25,6 @@ object GarageNotificationGroup {
     private var summarySource: Pair<Long, String>? = null
     private var latestStatus: Notification? = null
     private var statusHidden = false
-    private var statusRefreshing = false
     private const val CAR_EXTENSION_KEY = "androidx.car.app.EXTENSIONS"
 
     @Synchronized
@@ -48,20 +47,14 @@ object GarageNotificationGroup {
     fun statusPosted(context: Context, notification: Notification) {
         latestStatus = notification
         statusHidden = false
-        statusRefreshing = false
+        summarySource = null
         reconcile(context)
-    }
-
-    @Synchronized
-    fun statusRefreshPending() {
-        statusRefreshing = true
     }
 
     @Synchronized
     fun dismissSummary(context: Context) {
         latestStatus = null
         statusHidden = true
-        statusRefreshing = false
         reconcile(context)
     }
 
@@ -69,7 +62,6 @@ object GarageNotificationGroup {
     @SuppressLint("MissingPermission")
     @Synchronized
     fun reconcile(context: Context) {
-        if (statusRefreshing) return
         val appContext = context.applicationContext
         try {
             val manager = appContext.getSystemService(NotificationManager::class.java)
@@ -150,6 +142,3 @@ object GarageNotificationGroup {
         }
     }
 }
-
-
-

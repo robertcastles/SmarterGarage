@@ -66,6 +66,7 @@ object NotificationUtility {
     @Volatile private var lastArrivalHeadsUpTime = 0L
     private val arrivalLease = AutoArrivalLease()
     private var arrivalStatus: GarageStatus? = null
+    private var arrivalEvaluationStatus: GarageStatus? = null
 
     @SuppressLint("MissingPermission")
     fun triggerNotification(
@@ -454,6 +455,12 @@ object NotificationUtility {
             clearCarSessionNotification(appContext)
             return phoneNotification
         }
+        if (arrivalEvaluationStatus != status) {
+            arrivalLease.invalidate()
+            arrivalStatus = null
+            arrivalEvaluationStatus = status
+            NotificationManagerCompat.from(appContext).cancel(appContext.resources.getInteger(R.integer.garage_arrival_notification_id))
+        }
         if (arrivalLease.active) {
             // End the one-shot peek on a status change; restore a fresh persistent card.
             // Repeated identical polls must not recreate a second Auto surface.
@@ -501,6 +508,7 @@ object NotificationUtility {
     fun clearCarSessionNotification(context: Context) {
         arrivalLease.invalidate()
         arrivalStatus = null
+        arrivalEvaluationStatus = null
         NotificationManagerCompat.from(context).cancel(context.resources.getInteger(R.integer.garage_arrival_notification_id))
         carPostToken.incrementAndGet()
         pendingCarStatus = null

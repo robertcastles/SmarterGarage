@@ -4,6 +4,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AutoArrivalLeaseTest {
+    @Test fun statusChangeRejectsPendingLocationBeforeArrivalAdmission() {
+        val lease = AutoArrivalLease()
+        val pendingLocation = lease.generation
+        lease.invalidate()
+        assertNull(lease.admit(pendingLocation))
+        assertFalse(lease.active)
+        assertNotNull(lease.admit(lease.generation))
+    }
+
     @Test fun onlyOneArrivalCanOwnTheSurface() {
         val lease = AutoArrivalLease()
         val token = lease.admit(lease.generation)!!
@@ -36,3 +45,4 @@ class AutoArrivalLeaseTest {
         assertTrue(lease.release(current))
     }
 }
+

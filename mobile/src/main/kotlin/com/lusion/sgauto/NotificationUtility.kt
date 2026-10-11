@@ -64,6 +64,8 @@ object NotificationUtility {
     /** After Android Auto attaches, wait this long before checking whether to pop the heads-up. */
     private const val CAR_START_ARRIVAL_HEADS_UP_DELAY_MS = 10_000L
     @Volatile private var lastArrivalHeadsUpTime = 0L
+    private val arrivalLease = AutoArrivalLease()
+    private var arrivalStatus: GarageStatus? = null
 
     @SuppressLint("MissingPermission")
     fun triggerNotification(
@@ -302,6 +304,7 @@ object NotificationUtility {
             return
         }
 
+        val generation = synchronized(this) { arrivalLease.generation }
         carPostScope.launch {
             val distance = GeofenceUtility.distanceToHomeMeters(context)
             if (distance == null) {
@@ -314,12 +317,45 @@ object NotificationUtility {
             }
             // Only claim the interval slot once we're actually posting, so a far-away
             // ENTER doesn't block the later in-radius (car-start) attempt.
-            lastArrivalHeadsUpTime = System.currentTimeMillis()
-            val builder = buildGarageNotificationBuilder(context, UpdateType.GARAGESTATUS, status, headsUp = true)
-                .setTimeoutAfter(ARRIVAL_HEADS_UP_TIMEOUT_MS)
-            val arrivalId = context.resources.getInteger(R.integer.garage_arrival_notification_id)
-            Log.i(TAG, "postArrivalHeadsUp: posting arrival heads-up status=$status (${distance.toInt()}m from home)")
-            CarNotificationManager.from(context).notify(arrivalId, builder)
+            synchronized(this@NotificationUtility) {
+                val latest = getLastGarageStatus(context)
+                val admittedAt = System.currentTimeMillis()
+                if (!LusionUtility.isInCarSession ||
+                    (!GarageUtility.isInsideGeofence(context) && !GarageUtility.shouldKeepNotificationOnGeofenceExit(latest)) ||
+                    admittedAt - lastArrivalHeadsUpTime < ARRIVAL_HEADS_UP_MIN_INTERVAL_MS) return@synchronized
+                val lease = arrivalLease.admit(generation) ?: return@synchronized
+                val arrivalId = context.resources.getInteger(R.integer.garage_arrival_notification_id)
+                val manager = CarNotificationManager.from(context)
+                try {
+                    carPostToken.incrementAndGet()
+                    pendingCarStatus = null
+                    lastCarPostedStatus = null
+                    manager.cancel(autoNotificationId(context))
+                    val builder = buildGarageNotificationBuilder(context, UpdateType.GARAGESTATUS, latest,
+                        headsUp = true, carNotificationTitle = "Smarter Garage")
+                        .setTimeoutAfter(ARRIVAL_HEADS_UP_TIMEOUT_MS)
+                    manager.notify(arrivalId, builder)
+                    arrivalStatus = latest
+                    lastArrivalHeadsUpTime = admittedAt
+                    Log.i(TAG, "postArrivalHeadsUp: posting exclusive arrival heads-up status=$latest")
+                } catch (error: Exception) {
+                    arrivalLease.release(lease)
+                    arrivalStatus = null
+                    manager.cancel(arrivalId)
+                    refreshForCarSession(context)
+                    Log.w(TAG, "Could not post arrival heads-up", error)
+                    return@synchronized
+                }
+                carPostScope.launch {
+                    delay(ARRIVAL_HEADS_UP_TIMEOUT_MS)
+                    synchronized(this@NotificationUtility) {
+                        if (!arrivalLease.release(lease)) return@synchronized
+                        arrivalStatus = null
+                        manager.cancel(arrivalId)
+                        if (LusionUtility.isInCarSession) refreshForCarSession(context)
+                    }
+                }
+            }
         }
     }
 
@@ -329,10 +365,15 @@ object NotificationUtility {
      * there is no geofence ENTER transition in that case).
      */
     fun scheduleArrivalHeadsUpAfterCarStart(context: Context) {
+        val generation = synchronized(this) { arrivalLease.generation }
         carPostScope.launch {
             delay(CAR_START_ARRIVAL_HEADS_UP_DELAY_MS)
             Log.i(TAG, "scheduleArrivalHeadsUpAfterCarStart: delay elapsed, evaluating arrival heads-up")
-            postArrivalHeadsUp(context, getLastGarageStatus(context))
+            synchronized(this@NotificationUtility) {
+                if (generation == arrivalLease.generation && LusionUtility.isInCarSession) {
+                    postArrivalHeadsUp(context, getLastGarageStatus(context))
+                }
+            }
         }
     }
 
@@ -413,6 +454,14 @@ object NotificationUtility {
             clearCarSessionNotification(appContext)
             return phoneNotification
         }
+        if (arrivalLease.active) {
+            // End the one-shot peek on a status change; restore a fresh persistent card.
+            // Repeated identical polls must not recreate a second Auto surface.
+            if (arrivalStatus == status) return phoneNotification
+            arrivalLease.invalidate()
+            arrivalStatus = null
+            NotificationManagerCompat.from(appContext).cancel(appContext.resources.getInteger(R.integer.garage_arrival_notification_id))
+        }
         // Do not let Auto deduplication suppress phone timestamp/action updates. Also
         // avoid restarting the gap for repeated polls of a state already pending.
         if (pendingCarStatus == status || (!forceLifecycleRefresh && pendingCarStatus == null &&
@@ -450,6 +499,9 @@ object NotificationUtility {
     /** Disconnect cleanup must never remove phone controls or foreground monitors. */
     @Synchronized
     fun clearCarSessionNotification(context: Context) {
+        arrivalLease.invalidate()
+        arrivalStatus = null
+        NotificationManagerCompat.from(context).cancel(context.resources.getInteger(R.integer.garage_arrival_notification_id))
         carPostToken.incrementAndGet()
         pendingCarStatus = null
         lastCarPostedStatus = null

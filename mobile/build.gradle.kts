@@ -125,8 +125,10 @@ dependencies {
     implementation(libs.material3)
     implementation(libs.play.services.location)
     implementation(libs.preference.ktx)
-    implementation(libs.ui.tooling)
+    debugImplementation(libs.ui.tooling)
     implementation(libs.ui.tooling.preview)
     implementation(libs.ui.tooling.preview.android)
     implementation(libs.work.runtime.ktx)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:${libs.versions.kotlinxCoroutinesAndroid.get()}")
 }

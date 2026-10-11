@@ -38,4 +38,35 @@ Never retry a door command automatically after uncertain delivery.
 
 ## Progress
 
-- Plan recorded; implementation phases pending.
+- `8998871`: plan recorded.
+- `0a8e19f`: endpoint credential policy, separate credential-free diagnostic client,
+  home-test TLS bypass retained, non-exported/validated UI status messages.
+- `814d03b`: eight network-policy JVM tests, debug-only CI, debug-only Compose tooling.
+- `0a7190a`: cancellable activity location subscription, bounded fresh home acquisition,
+  stop/replacement cancellation, normalized update-rate preference.
+- `00569f5`: shared command serialization, cancellable queue admission, awaited
+  command workers, no replay on later worker attempts, three concurrency tests.
+- `b34f42a`: typed status fetch outcomes, dispatch-time quota reservation, fresh-only
+  confirmation in service/pulse/status workers and car-connect probe.
+- Privacy milestone: platform backup exclusions, default telemetry collection disabled,
+  home-test/privacy documentation; redirects disabled to preserve endpoint boundaries.
+
+## Remaining work / limitations
+
+- CI is configured but has not yet run on GitHub; local debug builds/tests/lint pass.
+- Command serialization is process-local, not exactly-once durable delivery. WorkManager
+  scheduling latency and foreground-service handoff still need phone/Auto device testing.
+  Boolean command results still need accepted/rejected/uncertain UI outcomes.
+- Foreground-service command admission is still coupled to replacing the monitor job;
+  complete separation requires a service-owned command queue with acknowledged handoff.
+- Freshness migration is incremental: background-runnable timeout/cleanup and notification
+  publication still use cache; add single-flight/generation-aware status publication and
+  retain the exact observation used for final-card confirmation.
+- Extract a state repository/ViewModel and immutable location acceptance policy; current
+  extractions are NetworkPolicy, CommandExecutor, and StatusFetchResult, not a full rewrite.
+- Add transport integration tests, malformed status/import tests, and location lifecycle tests.
+- Manual JSON import still needs strict schema/key/type/range validation before replacement.
+  Export remains plaintext by design. SDK removal/telemetry opt-in needs a separate decision.
+- Audit legacy location-service cleanup, crash-guard recovery, host-validator fallback,
+  Kotlin version/configuration flags, and unused resources before making broad deletions.
+

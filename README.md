@@ -49,6 +49,33 @@ The real Firebase configuration is intentionally excluded from Git. A placeholde
 
 Configure your own SmartThings personal access token and device in the application's settings. Never put a token into source code, example requests, screenshots, or issue reports. Do not send a real token to a mock or alternate debug server.
 
+### Home testing and quality checks
+
+Debug routing still supports HTTPS home servers with self-signed certificates and
+hostname mismatches. Verification is deliberately bypassed only on the configured
+test endpoint; use a trusted network. The test endpoint cannot be SmartThings
+production. Test API requests use the separate optional **Test server token**,
+never the production PAT. Diagnostic pings use no bearer token and have a separate
+client. Existing test servers requiring the PAT must switch to a test credential.
+
+Run `:mobile:compileDebugKotlin :mobile:testDebugUnitTest :mobile:lintDebug` for
+quality validation. GitHub CI runs these debug-only tasks with disposable Firebase
+configuration, unsuitable for a working Firebase deployment. See [QUALITY_PLAN.md](QUALITY_PLAN.md)
+for implementation progress and required device checks.
+
+### Privacy defaults
+
+Firebase Analytics and Crashlytics SDKs remain included, but automatic collection
+is disabled by default in the manifest. This does not remove the SDKs or erase
+previously uploaded data. There is currently no in-app telemetry opt-in control.
+SmartThings requests still communicate with SmartThings; enabling diagnostic
+pings sends device/status information to the chosen test endpoint.
+
+Platform cloud backup and device transfer of app storage are excluded. Manual
+settings export remains available and includes plaintext credentials and home
+coordinates (including the test token); store exports privately. Review Play
+privacy declarations before distribution whenever SDK or collection behavior changes.
+
 ## Signing
 
 Debug builds do not require the owner's Play signing key or release credentials.
@@ -62,4 +89,5 @@ Keep the keystore outside the repository. Never commit keystores, passwords, pri
 IDE state, local configuration, diagnostic logs, settings exports, and generated applications are excluded from Git. These files can contain credentials, device identifiers, locations, or private-network details.
 
 Before sharing a log, screenshot, or exported settings file, review and redact it. Settings exports can include the SmartThings token and home location. Ignore rules are not a substitute for reviewing the files staged for a commit.
+
 

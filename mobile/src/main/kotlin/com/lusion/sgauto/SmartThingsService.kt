@@ -326,6 +326,9 @@ object SmartThingsService {
 
     private fun createClient(context: Context, debugMode: Boolean, endpoint: HttpUrl, diagnostic: Boolean = false): OkHttpClient {
         val builder = OkHttpClient.Builder()
+            // Test TLS bypass and origin-scoped authentication must not follow redirects.
+            .followRedirects(false)
+            .followSslRedirects(false)
             .dns(FallbackDns(context.applicationContext))  // Use custom DNS resolver
             .retryOnConnectionFailure(true)
             // Use a very aggressive connection pool - don't keep idle connections long
@@ -445,7 +448,6 @@ object SmartThingsService {
         val endpoint = NetworkPolicy.testUrl(getSmartThingsURL(context, true))
         if (diagnosticUrl != endpoint) {
             diagnosticClient?.connectionPool?.evictAll()
-            diagnosticClient?.dispatcher?.executorService?.shutdown()
             diagnosticClient = null
             diagnosticApi = null
             diagnosticUrl = endpoint

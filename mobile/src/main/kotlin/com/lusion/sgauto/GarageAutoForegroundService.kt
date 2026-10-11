@@ -19,7 +19,6 @@ import com.lusion.sgauto.Constants.NORMAL_GARAGE_POLLING_PING_PERIOD
 import com.lusion.sgauto.Constants.SLOW_GARAGE_POLLING_PING_PERIOD
 import com.lusion.sgauto.GarageUtility.GarageCommand
 import com.lusion.sgauto.GarageUtility.GarageStatus
-import com.lusion.sgauto.LusionUtility.UpdateType
 import com.lusion.sgauto.PreferenceUtility.getPreference
 import kotlinx.coroutines.*
 import kotlin.time.Duration.Companion.milliseconds
@@ -38,8 +37,12 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 class GarageAutoForegroundService : Service() {
 
-    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val serviceScope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
     private var monitorJob: Job? = null
+    private val commandOwner = ServiceCommandOwner(serviceScope)
+    private var latestStartId = 0
+    private var commandEpoch = 0
+    private var stopRequested = false
 
     /**
      * Incremented each time a new command arrives via onStartCommand.
@@ -69,6 +72,20 @@ class GarageAutoForegroundService : Service() {
     @SuppressLint("NewApi")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.i(TAG, "onStartCommand: intent=$intent, flags=$flags, startId=$startId")
+        latestStartId = startId
+        if (intent?.action == ACTION_STOP_MONITOR) {
+            stopRequested = true
+            if (!commandOwner.hasCommands) {
+                jobGeneration.incrementAndGet()
+                monitorJob?.cancel()
+                GarageUtility.foregroundServicePolling.set(false)
+                stopMonitoring()
+            } else {
+                Log.i(TAG, "Monitor stop deferred: admitted commands still owned")
+            }
+            return START_NOT_STICKY
+        }
+        stopRequested = false
 
         val notification = buildMonitoringNotification()
         try {
@@ -96,15 +113,19 @@ class GarageAutoForegroundService : Service() {
             val fallbackCmd = intent?.getStringExtra(EXTRA_COMMAND)
             if (fallbackCmd != null) {
                 Log.i(TAG, "Sending command $fallbackCmd via fallback (FG start failed)")
-                val cmd = if (fallbackCmd == "OPEN") GarageCommand.OPEN else GarageCommand.CLOSE
-                serviceScope.launch {
+                val cmd = GarageCommand.entries.firstOrNull { it.name == fallbackCmd }
+                    ?: return START_NOT_STICKY
+                commandOwner.admit {
                     try {
                         GarageUtility.sendGarageCommandSuspend(applicationContext, cmd)
                         GarageUtility.ongoingGarageStatusThread(applicationContext, "FGService-fallback-after-fail")
                     } catch (ex: Exception) {
                         Log.e(TAG, "Fallback command also failed: ${ex.message}")
                     } finally {
-                        stopSelf()
+                        serviceScope.launch {
+                            commandOwner.awaitIdle()
+                            if (monitorJob?.isActive != true) stopSelfResult(latestStartId)
+                        }
                     }
                 }
                 return START_NOT_STICKY
@@ -114,7 +135,7 @@ class GarageAutoForegroundService : Service() {
             // refresh the status instead of silently doing nothing.
             Log.i(TAG, "Monitor-only FG start failed, falling back to background polling")
             GarageUtility.ongoingGarageStatusThread(applicationContext, "FGService-monitor-fallback-after-fail")
-            stopSelf()
+            if (!commandOwner.hasCommands) stopSelfResult(latestStartId)
             return START_NOT_STICKY
         }
 
@@ -145,6 +166,25 @@ class GarageAutoForegroundService : Service() {
         // service's own polling for the same shared request-budget tokens — see
         // stopBackgroundPolling's doc for why that starves/delays our confirmation polls.
         GarageUtility.stopBackgroundPolling("GarageAutoFGService.onStartCommand (gen=$myGeneration)")
+        if (command != null) {
+            commandEpoch++
+            commandOwner.admit {
+                try {
+                    Log.i(TAG, "Phase 1: Sending garage command: $command")
+                    val accepted = GarageUtility.sendGarageCommandSuspend(applicationContext, command)
+                    Log.i(TAG, "Phase 1: Command result: accepted=$accepted")
+                    if (accepted) {
+                        NotificationUtility.postGarageStatusCard(applicationContext,
+                            if (command == GarageCommand.OPEN) GarageStatus.OPENING else GarageStatus.CLOSING)
+                        delay((GARAGE_ACTION_POLLING_DELAY + 500).milliseconds)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Log.e(TAG, "Admitted command failed; not replaying", error)
+                }
+            }
+        }
 
         monitorJob = serviceScope.launch {
             Log.i(TAG, "monitorJob launched (gen=$myGeneration)")
@@ -156,29 +196,9 @@ class GarageAutoForegroundService : Service() {
                 // --- Phase 1: Send garage command (if any) ---
                 // All sources share command serialization. Queue admission remains
                 // cancellable; the executor protects an already-dispatched request.
-                if (command != null) {
-                    Log.i(TAG, "Phase 1: Sending garage command: $command")
-                    val accepted = GarageUtility.sendGarageCommandSuspend(applicationContext, command)
-                    Log.i(TAG, "Phase 1: Command result: accepted=$accepted")
-
-                    if (accepted) {
-                        // The command was accepted. Eagerly reflect the moving state on the
-                        // (separate) garage status card so the Android Auto user immediately
-                        // sees OPENING/CLOSING. The status card is independent of this
-                        // service's own monitoring notification, so there is no detach/repost
-                        // dance — we just post the status like any other update.
-                        val movingStatus = when (command) {
-                            GarageCommand.OPEN -> GarageStatus.OPENING
-                            GarageCommand.CLOSE -> GarageStatus.CLOSING
-                        }
-                        NotificationUtility.postGarageStatusCard(applicationContext, movingStatus)
-                        Log.i(TAG, "Phase 1: Waiting ${GARAGE_ACTION_POLLING_DELAY}ms for garage to begin moving...")
-                        delay((GARAGE_ACTION_POLLING_DELAY + 500).milliseconds)
-                        Log.i(TAG, "Phase 1: Delay complete, entering Phase 2")
-                    } else {
-                        Log.w(TAG, "Phase 1: Command NOT accepted, entering Phase 2 anyway")
-                    }
-                } else {
+                commandOwner.awaitIdle()
+                val observationEpoch = commandEpoch
+                if (command == null) {
                     Log.i(TAG, "Phase 1: No command, entering Phase 2 (monitor-only)")
                 }
 
@@ -191,6 +211,7 @@ class GarageAutoForegroundService : Service() {
                 // Track whether we ever saw a transitional state to know the command took effect
                 var sawTransitional = false
                 while (isActive) {
+                    commandOwner.awaitIdle()
                     val elapsed = System.currentTimeMillis() - pollStartTime
 
                     // Stop if max service time exceeded
@@ -201,11 +222,11 @@ class GarageAutoForegroundService : Service() {
 
                     // Make the status request DIRECTLY in the foreground service scope
                     Log.d(TAG, "Polling #${++pollCount} at ${elapsed}ms")
-                    val result = GarageUtility.makeStatusRequest(
+                    val result = withContext(Dispatchers.IO) { GarageUtility.makeStatusRequest(
                         applicationContext,
                         ignoreTimers = true, // We control our own timing
                         caller = "FGService-poll-$pollCount"
-                    )
+                    ) }
 
                     // Check garage state to decide polling speed and whether to stop
                     val status = GarageUtility.getLastGarageStatus(applicationContext)
@@ -248,7 +269,8 @@ class GarageAutoForegroundService : Service() {
                     }
                     Log.d(TAG, "Status=$status, transitional=$isTransitional, sawTransitional=$sawTransitional, sawFinal=$sawFinalAfterTransitional, errors=$consecutiveErrors, delay=${pollDelay}ms")                    // Stop conditions:
                     // 1. We saw the garage transition and then reach a final state (the normal success case)
-                    val mayFinish = AutoMonitorPolicy.mayFinish(watchUntilClosed, result)
+                    val mayFinish = !commandOwner.hasCommands && observationEpoch == commandEpoch &&
+                        AutoMonitorPolicy.mayFinish(watchUntilClosed || stopRequested, result)
                     if (sawFinalAfterTransitional && mayFinish) {
                         completedObservation = observed
                         Log.i(TAG, "Garage completed transition to final state ($status), stopping")
@@ -304,7 +326,7 @@ class GarageAutoForegroundService : Service() {
                 if (isReplaced) {
                     // A newer command has taken over — do NOT stop the service or reset polling.
                     Log.i(TAG, "Monitor job (gen=$myGeneration) replaced by newer command (gen=${jobGeneration.get()}), skipping cleanup")
-                } else {
+                } else if (!commandOwner.hasCommands) {
                     Log.i(TAG, "Monitor job (gen=$myGeneration) finished, cleaning up")
                     GarageUtility.foregroundServicePolling.set(false)
 
@@ -355,6 +377,7 @@ class GarageAutoForegroundService : Service() {
     @SuppressLint("NewApi")
     override fun onTimeout(startId: Int, fgsType: Int) {
         Log.w(TAG, "onTimeout called by system (startId=$startId, fgsType=$fgsType)")
+        serviceScope.cancel()
         GarageUtility.foregroundServicePolling.set(false)
         monitorJob?.cancel()
 
@@ -366,7 +389,7 @@ class GarageAutoForegroundService : Service() {
             GarageUtility.ongoingGarageStatusThread(applicationContext, "FGService-timeout-fallback")
         }
 
-        stopMonitoring()
+        stopMonitoring(force = true)
         reconcileNotificationAfterRelease()
     }
 
@@ -426,7 +449,11 @@ class GarageAutoForegroundService : Service() {
      * alone — its visibility follows the normal geofence rule. If a real physical transition
      * completed, [finalStatus] is posted once to confirm the final OPEN/CLOSED state.
      */
-    private fun stopMonitoring(finalStatus: GarageStatus? = null) {
+    private fun stopMonitoring(finalStatus: GarageStatus? = null, force: Boolean = false) {
+        if (!force && commandOwner.hasCommands) {
+            Log.i(TAG, "Foreground release deferred while commands are owned")
+            return
+        }
         synchronized(GarageNotificationGroup) {
             try {
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -440,7 +467,7 @@ class GarageAutoForegroundService : Service() {
             Log.i(TAG, "stopMonitoring: confirming final status=$finalStatus on status card")
             NotificationUtility.postGarageStatusCard(applicationContext, finalStatus)
         }
-        stopSelf()
+        stopSelfResult(latestStartId)
     }
 
     companion object {
@@ -448,6 +475,7 @@ class GarageAutoForegroundService : Service() {
         private const val PREF_KEY = "use_foreground_service_auto"
         private const val EXTRA_COMMAND = "garage_command"
         private const val EXTRA_WATCH_UNTIL_CLOSED = "watch_until_closed"
+        private const val ACTION_STOP_MONITOR = "com.lusion.sgauto.STOP_MONITOR"
 
         /**
          * ALWAYS starts the foreground service with a garage command (OPEN/CLOSE).
@@ -523,9 +551,10 @@ class GarageAutoForegroundService : Service() {
          */
         fun stop(context: Context) {
             Log.i(TAG, "Stopping foreground service")
-            val intent = Intent(context, GarageAutoForegroundService::class.java)
+            if (!GarageUtility.foregroundServicePolling.get()) return
+            val intent = Intent(context, GarageAutoForegroundService::class.java).setAction(ACTION_STOP_MONITOR)
             try {
-                context.stopService(intent)
+                context.startService(intent)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to stop foreground service: ${e.message}", e)
             }

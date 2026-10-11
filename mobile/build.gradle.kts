@@ -22,7 +22,7 @@ android {
         targetSdk = 36
         versionCode = 576
         versionName = "2025.${versionCode}"
-//        testInstrumentationRunner ("androidx.test.runner.AndroidJUnitRunner")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
@@ -131,4 +131,7 @@ dependencies {
     implementation(libs.work.runtime.ktx)
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:${libs.versions.kotlinxCoroutinesAndroid.get()}")
+    androidTestImplementation(libs.test.runner)
+    androidTestImplementation(libs.test.junit)
+    androidTestImplementation(libs.test.uiautomator)
 }

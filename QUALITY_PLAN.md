@@ -56,6 +56,10 @@ Never retry a door command automatically after uncertain delivery.
 - DHU automation: native console runner and Windows OCR; handshake/screenshot smoke
   test passes on the running AVD. See tools/README.md. Host open/close notification
   scenarios still need stable calibrated targets and server-side command-count assertions.
+- UI Automator: AndroidJUnitRunner and androidTest-only dependencies added. Two
+  command-free emulator tests pass (phone resume and all-display inspection).
+  Strict host capability probe finds projection but zero accessible Auto host controls;
+  use native DHU automation for host commands on this setup, not default-display selectors.
 
 ## Remaining work / limitations
 
@@ -76,5 +80,6 @@ Never retry a door command automatically after uncertain delivery.
   Export remains plaintext by design. SDK removal/telemetry opt-in needs a separate decision.
 - Audit legacy location-service cleanup, crash-guard recovery, host-validator fallback,
   Kotlin version/configuration flags, and unused resources before making broad deletions.
+
 
 

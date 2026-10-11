@@ -41,6 +41,29 @@ disconnect DHU; reconnection is part of each run.
 
 ## Current coverage
 
+### Android UI Automator
+
+Device tests use AndroidJUnitRunner and catalog-managed UI Automator dependencies.
+They require an already configured local fake-server emulator and never tap a door
+command or change settings. Resuming the app can still poll and register geofences.
+
+```powershell
+.\gradlew.bat :mobile:connectedDebugAndroidTest
+```
+
+For an already installed test APK, a strict Auto-host capability probe is:
+
+```powershell
+adb -s emulator-5554 shell am instrument -w -e class 'com.lusion.sgauto.UiAutomatorSmokeTest#inspectAndroidAutoAccessibilityOnAllDisplays' -e requireAutoHost true com.lusion.sgauto.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+The ordinary two-test suite passed on the connected AVD. The strict capability
+probe found a projection display and a Maps root but **zero accessible Android Auto
+host roots/clickable nodes**. Its expected failure means this host cannot presently
+be driven through UI Automator's accessibility tree; it is not an app regression.
+Probe diagnostics use the `SGUiAutomator` log tag and omit text/credentials/location.
+Use UI Automator for phone/SystemUI tests and DHU console/OCR for host clicks.
+
 - Verified native console handshake, video focus, screenshots, local Windows OCR,
   scripted key/tap dispatch, and clean subprocess shutdown.
 - App command scenarios are **not yet calibrated/validated** against this host's
@@ -49,3 +72,4 @@ disconnect DHU; reconnection is part of each run.
 - Instrumentation that sends an existing PendingIntent can test AUTO routing but
   cannot prove the real host's foreground-service-start exemption. Keep at least
   one DHU host-click scenario for end-to-end acceptance.
+

@@ -15,6 +15,17 @@ from urllib.parse import urlparse
 from auto_fixture import AutoFixture, control
 
 
+def notification_ids(records):
+    return set(map(int, re.findall(r'NotificationRecord\([^\n]*pkg=com\.lusion\.sgauto[^\n]*\bid=(\d+)\b', records)))
+
+
+def exclusive_auto_ids(ids):
+    surfaces = ids & {3, 5}
+    if len(surfaces) > 1:
+        raise RuntimeError('Duplicate arrival and carrier Auto notifications are active')
+    return surfaces
+
+
 def physical_controls(controls):
     result = []
     for item in controls:
@@ -141,6 +152,7 @@ def main():
         raise RuntimeError('Select a fake garage device before testing')
     steps = json.loads(args.scenario.read_text(encoding='utf-8')) if args.scenario else []
     actions = [step['garage_action'] for step in steps if 'garage_action' in step]
+    moving_disconnect = any(step.get('disconnect_while_closing') for step in steps)
     if actions and not args.counted_auto_cycle:
         raise RuntimeError('Garage actions require --counted-auto-cycle')
     if args.counted_auto_cycle:
@@ -172,6 +184,8 @@ def main():
         if 'garage_action' in step and (step.get('tap_text') != '^' + step['garage_action'].upper() + '$' or
             'command' in step or 'Smarter Garage' not in step.get('before_text', [])):
             raise RuntimeError('Garage actions require a unique exact label and visible Smarter Garage notification')
+        if step.get('disconnect_while_closing') and (step.get('garage_action') != 'close' or not args.counted_auto_cycle):
+            raise RuntimeError('Moving disconnect requires the counted single CLOSE action')
         if step.get('disconnect') and (step is not steps[-1] or 'command' in step or 'tap_text' in step):
             raise RuntimeError('Disconnect must be the final assertion-only step')
         if 'navigate_text' in step:
@@ -188,7 +202,7 @@ def main():
     fixture = None
     if args.counted_auto_cycle:
         device('shell', 'am', 'force-stop', 'com.lusion.sgauto')
-        fixture = AutoFixture()
+        fixture = AutoFixture(motion_ms=30000 if moving_disconnect else 10000)
     messages = queue.Queue()
     observed = []
     try:
@@ -243,6 +257,7 @@ def main():
                 'GarageUtility:I', 'SGScreen:I', 'SGAutoApp:I', 'NotificationUtility:D', 'AndroidRuntime:E', '*:S')
             if fixture:
                 fixture.check()
+                assert_auto_surface()
             if 'FATAL EXCEPTION' in logs:
                 raise RuntimeError('Runtime crash occurred during scenario')
             if fixture and re.search(r'ForegroundServiceStartNotAllowedException|Phase 1: Command result: accepted=false|Watchdog fallback', logs):
@@ -252,6 +267,64 @@ def main():
             if time.monotonic() >= deadline:
                 raise RuntimeError('Expected app events not observed: ' + ', '.join(patterns))
             time.sleep(1)
+
+    surfaces_seen = set()
+
+    def auto_ids():
+        records = device('shell', 'dumpsys', 'notification')
+        return notification_ids(records)
+
+    def assert_auto_surface():
+        ids = exclusive_auto_ids(auto_ids())
+        surfaces_seen.update(ids)
+
+    def checked_wait(seconds):
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if fixture:
+                fixture.check()
+                assert_auto_surface()
+            time.sleep(min(.5, max(0, deadline - time.monotonic())))
+
+    def reconnect(index):
+        nonlocal process, messages
+        messages = queue.Queue()
+        process = subprocess.Popen([str(dhu), '-c', str(args.config.resolve()), f'--adb={args.port}'],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        threading.Thread(target=read_output, daemon=True).start()
+        deadline = time.monotonic() + 40
+        while time.monotonic() < deadline:
+            try:
+                if 'SSL negotiation finished successfully' in messages.get(timeout=1): break
+            except queue.Empty:
+                if process.poll() is not None: raise RuntimeError('Reconnect host exited before handshake')
+        else:
+            raise RuntimeError('Reconnect handshake timed out')
+        send('focus video lock')
+        checked_wait(7)
+        deadline = time.monotonic() + 30
+        while True:
+            assert_auto_surface()
+            if auto_ids() & {3, 5}: break
+            if time.monotonic() >= deadline: raise RuntimeError('Auto status carrier did not recover on reconnect')
+            fixture.check()
+            time.sleep(.5)
+        # Status-area navigation only; never resend a garage action.
+        for attempt in range(3):
+            image = screenshot(index)
+            try:
+                if notification_status_visible(text_controls(image), 'CLOSED'): break
+            except RuntimeError:
+                pass
+            send('tap 40 62')
+            checked_wait(5)
+            image = screenshot(index)
+            try:
+                if notification_status_visible(text_controls(image), 'CLOSED'): break
+            except RuntimeError:
+                pass
+        else:
+            raise RuntimeError('Latest CLOSED caption did not recover on reconnected Auto host')
 
     report = {'serial': args.serial, 'steps_passed': 0, 'passed': False}
     try:
@@ -284,7 +357,7 @@ def main():
                 while True:
                     notifications = device('shell', 'dumpsys', 'notification')
                     services = device('shell', 'dumpsys', 'activity', 'services', 'com.lusion.sgauto')
-                    active = re.search(r'NotificationRecord\([^\n]*pkg=com\.lusion\.sgauto[^\n]*\bid=(2|5)\b', notifications)
+                    active = re.search(r'NotificationRecord\([^\n]*pkg=com\.lusion\.sgauto[^\n]*\bid=(2|3|5)\b', notifications)
                     if not active and not re.search(r'ServiceRecord\{[^\n]*GarageAutoForegroundService', services):
                         break
                     if time.monotonic() >= deadline:
@@ -295,6 +368,8 @@ def main():
                 report['steps_passed'] += 1
                 continue
             last_image = screenshot(index)
+            if fixture:
+                assert_auto_surface()
             if step.get('before_text'):
                 visible = '\n'.join(item['text'] for item in text_controls(last_image))
                 if not all(re.search(pattern, visible, re.I | re.M) for pattern in step['before_text']):
@@ -322,7 +397,7 @@ def main():
                 send(f"tap {matches[0]['x']} {matches[0]['y']}")
             if 'command' in step:
                 send(step['command'])
-            time.sleep(float(step.get('wait', 1)))
+            checked_wait(float(step.get('wait', 1)))
             if 'navigate_text' in step:
                 for attempt in range(3):
                     last_image = screenshot(index)
@@ -333,13 +408,43 @@ def main():
                     if len(matches) > 1 or attempt == 2:
                         raise RuntimeError('Unique navigation destination not visible: ' + step['navigate_text'])
                     send(step['command'])
-                    time.sleep(float(step.get('wait', 1)))
+                    checked_wait(float(step.get('wait', 1)))
             if step.get('expect_log'):
                 wait_for_logs(step['expect_log'], since, float(step.get('timeout', 60)))
             if 'garage_action' in step:
                 action = step['garage_action'].upper()
                 final = 'OPEN' if action == 'OPEN' else 'CLOSED'
                 wait_for_logs([f'handleGarageCommand: action={action}, source=AUTO, command={action}'], since, 20)
+                if step.get('disconnect_while_closing'):
+                    wait_for_logs([r'startForeground succeeded', r'Phase 1: Command result: accepted=true',
+                        r'Status=CLOSING, transitional=true'], since, 30)
+                    if fixture.check()['status'] != 'closing':
+                        raise RuntimeError('Fixture not CLOSING at disconnect checkpoint')
+                    detached_since = device('shell', "date '+%m-%d %H:%M:%S.000'").strip()
+                    send('quit')
+                    process.wait(timeout=10)
+                    wait_for_logs([r'Car connection lost\.', r'watchUntilClosed=true'], detached_since, 20)
+                    deadline = time.monotonic() + 15
+                    while auto_ids() & {3, 5}:
+                        if time.monotonic() >= deadline: raise RuntimeError('Auto notifications survived moving disconnect')
+                        fixture.check()
+                        time.sleep(.5)
+                    if fixture.check()['status'] != 'closing' or 2 not in auto_ids():
+                        raise RuntimeError('Detached CLOSING did not retain foreground monitoring')
+                    wait_for_logs([r'stopMonitoring: confirming final status=CLOSED on status card'], detached_since, 90)
+                    report['fixture'] = fixture.finish()
+                    report['moving_disconnect'] = True
+                    deadline = time.monotonic() + 15
+                    while 2 in auto_ids() or re.search(r'ServiceRecord\{[^\n]*GarageAutoForegroundService',
+                        device('shell', 'dumpsys', 'activity', 'services', 'com.lusion.sgauto')):
+                        if time.monotonic() >= deadline: raise RuntimeError('Detached monitor did not stop after fresh CLOSED')
+                        fixture.check()
+                        time.sleep(.5)
+                    report['detached_monitor_stopped_after_closed'] = True
+                    reconnect(index)
+                    report['reconnected_closed'] = True
+                    report['steps_passed'] += 1
+                    continue
                 wait_for_logs([r'startForeground succeeded', r'Phase 1: Command result: accepted=true',
                     rf'Garage completed transition to final state \({final}\), stopping',
                     f'stopMonitoring: confirming final status={final} on status card'], since, 90)
@@ -367,6 +472,8 @@ def main():
             report['steps_passed'] += 1
         if fixture:
             report['fixture'] = fixture.finish()
+            report['auto_surfaces_seen'] = sorted(surfaces_seen)
+            report['no_overlapping_auto_notifications'] = True
         report['passed'] = True
         print('PASS: DHU handshake, screenshots, and scenario assertions')
     except Exception as error:

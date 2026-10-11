@@ -2,13 +2,30 @@
 import unittest
 from xml.sax.saxutils import quoteattr
 
-from dhu_test import control_center, notification_buttons, notification_status_visible, physical_controls, start_head_unit_server
+from dhu_test import control_center, exclusive_auto_ids, notification_ids, notification_buttons, notification_status_visible, physical_controls, start_head_unit_server
 
 
 def screen(*labels):
     return '<hierarchy>' + ''.join(
         '<node package="com.google.android.projection.gearhead" bounds="[10,20][30,40]" '
         + attribute + '=' + quoteattr(label) + '/>' for attribute, label in labels) + '</hierarchy>'
+
+
+class AutoIdentityTest(unittest.TestCase):
+    def test_parse_only_our_active_notification_records(self):
+        records = '\n'.join(['NotificationRecord(abc: pkg=com.lusion.sgauto user=0 id=3 tag=null)',
+            'NotificationRecord(def: pkg=com.other.app user=0 id=5 tag=null)',
+            'Historical notification pkg=com.lusion.sgauto id=5'])
+        self.assertEqual({3}, notification_ids(records))
+
+    def test_phone_and_monitor_do_not_count_as_auto_duplicates(self):
+        self.assertEqual({5}, exclusive_auto_ids({1, 2, 4, 5, 9003}))
+        self.assertEqual({3}, exclusive_auto_ids({1, 3}))
+        self.assertEqual(set(), exclusive_auto_ids({1, 2}))
+
+    def test_arrival_and_carrier_overlap_is_refused(self):
+        with self.assertRaises(RuntimeError):
+            exclusive_auto_ids({1, 3, 5})
 
 
 class ServerStartupTest(unittest.TestCase):
@@ -125,3 +142,4 @@ class NotificationTargetTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

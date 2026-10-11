@@ -23,8 +23,8 @@ def validate_snapshot(snapshot, generation, admitted):
 
 
 class AutoFixture:
-    def __init__(self):
-        control('reset', {'status': 'closed', 'startDelayMs': 8000, 'motionMs': 10000})
+    def __init__(self, motion_ms=10000):
+        control('reset', {'status': 'closed', 'startDelayMs': 8000, 'motionMs': motion_ms})
         self.generation = control('snapshot')['generation']
         self.admitted = []
         self.saw_open = False
@@ -78,3 +78,4 @@ class AutoFixture:
         self.thread.join(timeout=10)
         if self.thread.is_alive():
             raise RuntimeError('Fixture observer did not stop')
+

@@ -157,14 +157,47 @@ OPEN then CLOSE and observed intermediate OPEN. Real DHU disconnect removed the
 Auto carrier and stopped the foreground monitor. Results:
 `build/auto-counted-cycle-verified/result.json`. Cleanup left the fixture CLOSED.
 
+### Arrival duplication and moving disconnect
+
+Arrival heads-up ID 3 and persistent carrier ID 5 previously overlapped, exposing
+duplicate Auto controls. Arrival now has an exclusive, generation-checked lease:
+it cancels the carrier, suppresses identical carrier posts, and restores the latest
+status on expiry. A status change ends the peek early and restores the persistent
+card; disconnect/dismissal cancels both Auto IDs and invalidates delayed callbacks.
+Phone controls and FGS notifications retain their independent identities.
+
+The counted runner checks that IDs 3 and 5 never overlap during sampled navigation
+waits and command monitoring. Launcher selectors exclude the full arrival title,
+and action scenarios wait for the one-shot arrival to expire before using the carrier.
+
+```powershell
+python tools\dhu_test.py --counted-auto-cycle --config 'C:\Users\Admin\OneDrive - PMGNET\Desktop\DHU.ini' --scenario tools\scenarios\auto-moving-disconnect-1280x720.json --output build\auto-moving-disconnect
+```
+
+This separate case uses a deterministic 30-second motion window. It taps CLOSE
+once, requires service-fresh transitional CLOSING plus fixture CLOSING, disconnects
+the real DHU, requires Auto notification removal with foreground monitoring retained,
+and waits for fresh CLOSED while detached. It reconnects without fixture reset or
+app force-stop, asserts the latest CLOSED caption and recovered carrier, then performs
+a final CLOSED disconnect. Exact OPEN/CLOSE counts remain enforced throughout.
+This does not prove queued-before-dispatch command admission ownership.
+
+October 11 device evidence: `build/auto-moving-disconnect-stable/result.json`
+records exactly OPEN then CLOSE, fresh CLOSING at real disconnect, foreground
+monitoring until fresh CLOSED while detached, and CLOSED carrier repost on reconnect
+in app logs. Full scenario **did not pass**: the host-caption navigation check failed
+after reconnect. Later attempts failed before commands on handshake/launcher targets.
+No uncertain commands were replayed; cleanup left the fixture CLOSED. Both arrival
+and carrier were observed during the successful moving portion without sampled overlap.
+
 - Verified native console handshake, video focus, screenshots, local Windows OCR,
   scripted key/tap dispatch, and clean subprocess shutdown.
   The restored AVD's head-unit server was stopped; restarting it through the real
   settings menu restored the command-free DHU connection/screenshot probe.
 - The counted notification scenario is calibrated for this English 1280x720 host,
   not other layouts. Navigation may retry bounded toolbar taps; commands never do.
-  Disconnect while CLOSE is still moving, reconnect recovery, and repeated Auto
-  cycles remain separate acceptance cases; only CLOSED disconnect is claimed here.
+  Moving disconnect/reconnect is a separate scenario; passing results must be checked
+  independently. Repeated Auto cycles and queued-command handoff remain additional cases.
 - Instrumentation that sends an existing PendingIntent can test AUTO routing but
   cannot prove the real host's foreground-service-start exemption. Keep at least
   one DHU host-click scenario for end-to-end acceptance.

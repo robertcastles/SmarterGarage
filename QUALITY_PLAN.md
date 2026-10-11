@@ -60,6 +60,15 @@ Never retry a door command automatically after uncertain delivery.
   command-free emulator tests pass (phone resume and all-display inspection).
   Strict host capability probe finds projection but zero accessible Auto host controls;
   use native DHU automation for host commands on this setup, not default-display selectors.
+- Deterministic simulator fixture added in the separate repository at
+  `C:\projects\SmarterGarageAPI\SmarterGarageAPI` (opt-in `SMARTER_GARAGE_TEST_MODE=1`).
+  HTTPS API on 3000, loopback-only controls on 3001, generation-safe reset/cancellation,
+  FIFO response scripts, request counts, accepted command history, and header-presence
+  diagnostics. Six black-box fixture tests pass. AVD status/ping traffic reaches this
+  instance with no Authorization headers and no commands during the polling check.
+  Simulator changes remain uncommitted because that repository has owner edits already
+  in progress; startup/API/test instructions are in its README. Next: wire these controls
+  into asserted device/DHU scenarios (no end-to-end Auto cycle claimed yet).
 
 ## Remaining work / limitations
 
@@ -80,6 +89,7 @@ Never retry a door command automatically after uncertain delivery.
   Export remains plaintext by design. SDK removal/telemetry opt-in needs a separate decision.
 - Audit legacy location-service cleanup, crash-guard recovery, host-validator fallback,
   Kotlin version/configuration flags, and unused resources before making broad deletions.
+
 
 
 

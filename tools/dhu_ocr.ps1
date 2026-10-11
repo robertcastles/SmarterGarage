@@ -1,5 +1,7 @@
 param([Parameter(Mandatory = $true)][string]$ImagePath)
 $ErrorActionPreference = 'Stop'
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime] | Out-Null
 [Windows.Storage.FileAccessMode, Windows.Storage, ContentType = WindowsRuntime] | Out-Null
@@ -28,14 +30,25 @@ try {
         $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
         if ($null -eq $engine) { throw 'Install a Windows OCR language pack before text-driven DHU tests.' }
         $result = Await-Operation ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
+        $angle = if ($null -eq $result.TextAngle) { 0.0 } else { [double]$result.TextAngle }
         $lines = @($result.Lines | ForEach-Object {
             $words = @($_.Words)
             $left = ($words | ForEach-Object { $_.BoundingRect.X } | Measure-Object -Minimum).Minimum
             $top = ($words | ForEach-Object { $_.BoundingRect.Y } | Measure-Object -Minimum).Minimum
             $right = ($words | ForEach-Object { $_.BoundingRect.X + $_.BoundingRect.Width } | Measure-Object -Maximum).Maximum
             $bottom = ($words | ForEach-Object { $_.BoundingRect.Y + $_.BoundingRect.Height } | Measure-Object -Maximum).Maximum
-            [PSCustomObject]@{ text = $_.Text; x = [int](($left + $right) / 2); y = [int](($top + $bottom) / 2) }
+            $controls = @($words | ForEach-Object {
+                [PSCustomObject]@{
+                    text = $_.Text
+                    x = [int]($_.BoundingRect.X + $_.BoundingRect.Width / 2)
+                    y = [int]($_.BoundingRect.Y + $_.BoundingRect.Height / 2)
+                }
+            })
+            [PSCustomObject]@{
+                text = $_.Text; x = [int](($left + $right) / 2); y = [int](($top + $bottom) / 2)
+                words = $controls; angle = $angle; width = $bitmap.PixelWidth; height = $bitmap.PixelHeight
+            }
         })
-        ConvertTo-Json -InputObject $lines -Compress
+        ConvertTo-Json -InputObject $lines -Depth 5 -Compress
     } finally { $bitmap.Dispose() }
 } finally { $stream.Dispose() }

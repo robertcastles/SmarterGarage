@@ -1,0 +1,11 @@
+[
+  {"command": "restrict none", "wait": 1},
+  {"command": "keycode home", "wait": 3},
+  {"command": "keycode home", "wait": 3},
+  {"command": "tap 40 673", "wait": 5, "navigate_text": "^Smarter"},
+  {"tap_text": "^Smarter", "wait": 12},
+  {"command": "tap 40 62", "wait": 5, "navigate_text": "^Smarter Garage$"},
+  {"garage_action": "open", "tap_text": "^OPEN$", "before_text": ["Smarter Garage"], "wait": 1},
+  {"garage_action": "close", "tap_text": "^CLOSE$", "before_text": ["Smarter Garage"], "wait": 1},
+  {"disconnect": true}
+]

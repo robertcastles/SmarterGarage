@@ -153,14 +153,11 @@ class GarageAutoForegroundService : Service() {
             var sawFinalAfterTransitional = false
             try {
                 // --- Phase 1: Send garage command (if any) ---
-                // The foreground service is the sole command sender for Android Auto actions.
-                // Use NonCancellable so the command network call completes even if
-                // this coroutine is canceled mid-flight (e.g., by a rapid 2nd command).
+                // All sources share command serialization. Queue admission remains
+                // cancellable; the executor protects an already-dispatched request.
                 if (command != null) {
                     Log.i(TAG, "Phase 1: Sending garage command: $command")
-                    val accepted = withContext(NonCancellable) {
-                        GarageUtility.sendGarageCommandSuspend(applicationContext, command)
-                    }
+                    val accepted = GarageUtility.sendGarageCommandSuspend(applicationContext, command)
                     Log.i(TAG, "Phase 1: Command result: accepted=$accepted")
 
                     if (accepted) {

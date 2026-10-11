@@ -23,6 +23,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import retrofit2.HttpException
 import java.net.InetAddress
 import java.net.URL
@@ -32,6 +36,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 object GarageUtility {
     private const val TAG = "GarageUtility"
+    private val commandExecutor = CommandExecutor()
     var gStartFastLoop = true
     var garageUpdateRunning = AtomicBoolean(false)
 
@@ -252,7 +257,10 @@ object GarageUtility {
      * (e.g., foreground service scope) to inherit the caller's priority context.
      * Returns true if the command was accepted, false otherwise.
      */
-    suspend fun sendGarageCommandSuspend(context: Context, command: GarageCommand): Boolean {
+    suspend fun sendGarageCommandSuspend(context: Context, command: GarageCommand): Boolean =
+        commandExecutor.execute { dispatchGarageCommand(context.applicationContext, command) }
+
+    private suspend fun dispatchGarageCommand(context: Context, command: GarageCommand): Boolean {
         try {
             if (!validGarageTokens(context)) return false
 
@@ -278,13 +286,16 @@ object GarageUtility {
 
             if (response.isSuccessful) {
                 response.body()?.let { commandResponse ->
-                    handleGarageCommandResponse(context, commandResponse.results[0].status, command)
-                    return commandResponse.results[0].status == "ACCEPTED"
+                    val status = commandResponse.results.firstOrNull()?.status
+                    handleGarageCommandResponse(context, status, command)
+                    return status == "ACCEPTED"
                 }
             } else {
                 Log.e(TAG, "sendGarageCommand: unsuccessful response from $baseUrl: ${response.code()}")
-                accessError(context, "sendGarageCommand", response.raw().request.url.toString(), null)
+                logApiError(context, response, "sendGarageCommand")
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val debugMode = getPreference("debug_switch", Boolean::class.java, context) as? Boolean == true
             val baseUrl = if (debugMode) (getPreference("debug_server", String::class.java, context) as? String) ?: "https://api.smartthings.com" else "https://api.smartthings.com"
@@ -295,9 +306,10 @@ object GarageUtility {
     }
 
     fun sendGarageCommand(context: Context, command: GarageCommand) {
-        CoroutineScope(Dispatchers.IO).launch {
-            sendGarageCommandSuspend(context, command)
-        }
+        val request = OneTimeWorkRequestBuilder<GarageCommandWorker>()
+            .setInputData(workDataOf("ACTION" to command.name))
+            .build()
+        WorkManager.getInstance(context.applicationContext).enqueue(request)
     }
 
     private fun handleGarageCommandResponse(context: Context, response: String?, command: GarageCommand) {

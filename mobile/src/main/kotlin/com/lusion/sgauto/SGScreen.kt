@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.location.Location
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.car.app.CarAppPermission
 import androidx.car.app.CarContext
@@ -28,8 +30,6 @@ import com.lusion.sgauto.GarageUtility.sendGarageCommand
 import com.lusion.sgauto.LusionUtility.getBitmapFromVectorDrawable
 import com.lusion.sgauto.PreferenceUtility.getPreference
 import java.util.Date
-import java.util.Timer
-import java.util.TimerTask
 
 /**
  * Smarter Garage default Auto launch screen
@@ -40,6 +40,12 @@ import java.util.TimerTask
 
 class SGScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycleObserver {
     private var isBroadcastReceiverRegistered = false
+    private val refreshHandler = Handler(Looper.getMainLooper())
+    private val delayedRefresh = Runnable { invalidate() }
+
+    init {
+        lifecycle.addObserver(this)
+    }
 
     override fun onResume(owner: LifecycleOwner) {
         Log.i(TAG, "onResume")
@@ -95,11 +101,8 @@ class SGScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycleObs
             } else {
                 OnClickListener {
                     if (keySet) {
-                        Timer().schedule(object : TimerTask() {
-                            override fun run() {
-                                invalidate()
-                            }
-                        }, 2000)
+                        refreshHandler.removeCallbacks(delayedRefresh)
+                        refreshHandler.postDelayed(delayedRefresh, 2000)
                     } else {
                         CarToast.makeText(carContext, R.string.auto_setup_warning, CarToast.LENGTH_LONG).show()
                     }
@@ -158,6 +161,7 @@ class SGScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycleObs
     }
 
     private fun stopMonitoring() {
+        refreshHandler.removeCallbacks(delayedRefresh)
         unregisterBroadcastReceiver()
     }
 
@@ -186,7 +190,7 @@ class SGScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycleObs
         Log.i(TAG, "registerBroadcastReceiver")
         val filter = IntentFilter("com.lusion.sgauto.SGScreen")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            carContext.registerReceiver(mBroadcastReceiver, filter, Context.RECEIVER_EXPORTED)
+            carContext.registerReceiver(mBroadcastReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             carContext.registerReceiver(mBroadcastReceiver, filter)
         }

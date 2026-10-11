@@ -211,6 +211,7 @@ class SGService : CarAppService() {
 //                        autoGarageStatus = garageStatus
                     }
                     val relayIntent = Intent("com.lusion.sgauto.SGScreen")
+                    relayIntent.setPackage(context.packageName)
                     relayIntent.putExtras(intent)
                     Log.i(TAG, "SGService send intent com.lusion.sgauto.SGScreen")
                     context.sendBroadcast(relayIntent)

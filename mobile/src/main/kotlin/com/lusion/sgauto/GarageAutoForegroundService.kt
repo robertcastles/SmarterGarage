@@ -151,6 +151,7 @@ class GarageAutoForegroundService : Service() {
             // Kept in coroutine scope so the final cleanup can distinguish a confirmed
             // physical transition from a timeout, cancellation, or monitor-only exit.
             var sawFinalAfterTransitional = false
+            var completedObservation: GarageStatus? = null
             try {
                 // --- Phase 1: Send garage command (if any) ---
                 // All sources share command serialization. Queue admission remains
@@ -247,25 +248,29 @@ class GarageAutoForegroundService : Service() {
                     }
                     Log.d(TAG, "Status=$status, transitional=$isTransitional, sawTransitional=$sawTransitional, sawFinal=$sawFinalAfterTransitional, errors=$consecutiveErrors, delay=${pollDelay}ms")                    // Stop conditions:
                     // 1. We saw the garage transition and then reach a final state (the normal success case)
-                    if (sawFinalAfterTransitional) {
+                    val mayFinish = AutoMonitorPolicy.mayFinish(watchUntilClosed, result)
+                    if (sawFinalAfterTransitional && mayFinish) {
+                        completedObservation = observed
                         Log.i(TAG, "Garage completed transition to final state ($status), stopping")
                         break
                     }
                     // 2. If we never sent a command (monitor-only), stop after reaching a final non-UNKNOWN state after 30s
-                    if (command == null && isFinal && elapsed > 30_000) {
+                    if (command == null && mayFinish && elapsed > 30_000) {
                         // ...unless this is a "watch until closed" session (started on car
                         // disconnect with the door still open): keep polling an OPEN door
                         // until it actually closes so we don't abandon the very transition
                         // we were kept alive to catch.
                         val keepWatchingOpen = watchUntilClosed && status != GarageStatus.CLOSED
                         if (!keepWatchingOpen) {
+                            completedObservation = observed
                             Log.i(TAG, "Monitor-only: garage in final state ($status), stopping")
                             break
                         }
                     }
                     // 3. If command was sent, but we never saw transitional AND enough time passed,
                     //    the command may not have taken effect. Stop after 60s.
-                    if (command != null && !sawTransitional && isFinal && elapsed > 60_000) {
+                    if (command != null && !sawTransitional && mayFinish && elapsed > 60_000) {
+                        completedObservation = observed
                         Log.i(TAG, "Command sent but no transition seen, garage stable at $status after ${elapsed}ms, stopping")
                         break
                     }
@@ -310,14 +315,14 @@ class GarageAutoForegroundService : Service() {
                     // automatic resumption until the next unrelated trigger (car reconnect,
                     // geofence change, or the 15-minute periodic worker).
                     val finalStatus = GarageUtility.getLastGarageStatus(applicationContext)
-                    if (finalStatus != GarageStatus.CLOSED) {
+                    if (completedObservation != GarageStatus.CLOSED) {
                         Log.i(TAG, "Garage still $finalStatus (not confirmed closed), starting background polling fallback")
                         GarageUtility.ongoingGarageStatusThread(applicationContext, "FGService-fallback")
                     }
                     // Remove this service's own monitoring notification, then confirm the
                     // final garage status on the (independent) status card if we saw a real
                     // physical transition complete.
-                    stopMonitoring(if (sawFinalAfterTransitional) finalStatus else null)
+                    stopMonitoring(if (sawFinalAfterTransitional) completedObservation else null)
                     reconcileNotificationAfterRelease()
                 }
             }

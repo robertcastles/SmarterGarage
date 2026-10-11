@@ -27,6 +27,7 @@ class SGAutoApp : Application() {
         super.onCreate()
         instance = this
         Log.init(applicationContext)
+        AssistantFunctionAvailability.initialize(applicationContext)
         installForegroundServiceCrashGuard()
         logVersionInfo()
         Log.i(TAG, "SGAutoApp onCreate")
@@ -69,7 +70,7 @@ class SGAutoApp : Application() {
                     LusionUtility.isInCarSession = isNowConnected
                     Log.i(TAG, "isInCarSession set to: ${LusionUtility.isInCarSession}")
                     if (!isNowConnected) {
-                        NotificationUtility.clearCarSessionNotification(applicationContext)
+                        NotificationUtility.clearCarSessionNotification(applicationContext, restorePhoneStatus = wasConnected)
                     }
 
                     if (isNowConnected && !wasConnected) {

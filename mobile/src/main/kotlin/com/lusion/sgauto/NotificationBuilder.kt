@@ -133,14 +133,10 @@ object NotificationBuilder {
             //                .setCustomContentView(notificationLayout)
             //                .setCustomBigContentView(notificationLayoutExpanded)
         if (autoCarrier) {
-            // The carrier may appear on the phone too, but it is not another controls
-            // card or a child of the phone status/monitor group.
-            builder.setContentTitle(context.getString(R.string.garage_auto_status_title))
-                .setContentText(notificationText)
-                .setCustomContentView(null)
-                .setStyle(null)
-                .clearActions()
-                .setOnlyAlertOnce(true)
+            // This is the sole persistent status/control card during a car session.
+            // Keep PHONE actions on the base notification and AUTO actions on the
+            // extender. Leave it ungrouped so Auto recreation cannot remove monitors.
+            builder.setOnlyAlertOnce(true)
         }
         if (headsUp || autoCarrier) {
             builder.extend(

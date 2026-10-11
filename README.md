@@ -20,8 +20,7 @@ I wanted several key features for usability as I perceived met my needs.
 I purposely did not make the following.
 
 1. A widget. Too easy to accidentally trigger.
-2. Voice controls. Maybe I can figure out Gemini if that has settled down.
-3. Any "automatic open door when arriving, close door when leaving". Though it was originally tempting, you'll soon realize why it's a terrible idea.
+2. Any "automatic open door when arriving, close door when leaving". Though it was originally tempting, you'll soon realize why it's a terrible idea.
 
 This app started as Hand written cobbled Java and XML layouts from the brutally bad examples I could find in the dark days of AA development. I converted it to Kotlin/Compose and now I maintain it with AI, of course. 
 
@@ -32,6 +31,37 @@ I should probably publish some material on how to get the smarthings API key. I'
 ## Things I want to do
 
 Try to port this to iOS since I'm the only android user in the family.
+
+## Gemini / AI assistant support (AppFunctions preview)
+
+**Settings → General → Gemini / AI assistant support** is enabled by default,
+including existing installations without the new preference. Turning it off
+disables function availability and rejects assistant requests and queued assistant
+commands that have not yet started. It cannot undo an already dispatched command.
+
+On supported Android 16+ devices, Jetpack AppFunctions exposes `openGarage`,
+`closeGarage`, and `getGarageStatus` for the single selected garage. OPEN/CLOSE
+return a one-shot confirmation intent: the assistant must launch it and the user
+must confirm on an unlocked phone within two minutes. No unattended or locked-screen
+movement is supported. A changed selected device invalidates the request. Submission
+means queued, not physical completion; check status to confirm movement. A fresh
+status response includes its API receipt time; failed/skipped/timed-out queries
+return **unconfirmed**, never cached state presented as current.
+
+AppFunctions is experimental (`1.0.0-alpha10`). Google's current documentation
+describes Gemini integration as a private preview with trusted testers; installing
+this app does **not** guarantee Gemini discovery, spoken replies, or Android Auto
+voice support. Older Android versions retain all existing manual controls but
+cannot use these AppFunctions. No Gemini API key, speech SDK, recording permission,
+or always-listening microphone is added. An authorized assistant receives the
+function descriptions/results; its own cloud processing and privacy policies apply.
+SmartThings credentials and home coordinates are not included in function results.
+
+References: [AppFunctions overview](https://developer.android.com/ai/appfunctions)
+and [integration guide](https://developer.android.com/ai/appfunctions/add-appfunctions).
+Validate discovery with Android's `cmd app_function list-app-functions` on a
+supported test device. Do not execute OPEN/CLOSE against a physical door as part
+of automated validation. Real Gemini preview/host testing remains required.
 
 ## Local development
 
@@ -89,5 +119,6 @@ Keep the keystore outside the repository. Never commit keystores, passwords, pri
 IDE state, local configuration, diagnostic logs, settings exports, and generated applications are excluded from Git. These files can contain credentials, device identifiers, locations, or private-network details.
 
 Before sharing a log, screenshot, or exported settings file, review and redact it. Settings exports can include the SmartThings token and home location. Ignore rules are not a substitute for reviewing the files staged for a commit.
+
 
 

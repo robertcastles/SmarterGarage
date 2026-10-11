@@ -72,10 +72,11 @@ Never retry a door command automatically after uncertain delivery.
 - Counted phone automation implemented: opt-in UI Automator OPEN/CLOSE test requires
   fresh normal app polling and unique phone controls; host runner owns reset, generation,
   intermediate OPEN, exact ordered command counts, repetition, and bounded cleanup.
-  Debug app/test APKs compile. Device execution is not passed: initial polling timed out
-  before commands; subsequent ADB operations stalled and Android activity service became
-  unavailable. No commands accepted. Restore AVD framework/network health before rerunning;
-  runner now rejects an unready framework. No freshness assertions were weakened.
+  After AVD restoration, debug app/test APKs build and all three counted phone cycles pass:
+  each observes fresh OPEN, exactly one OPEN then one CLOSE command, and final CLOSED.
+  Results: `build/phone-command-tests/result.json`. The earlier framework/network failure
+  is resolved for this phone test; no freshness assertions were weakened. This validates
+  the phone UI/worker path, not Android Auto notification routing or host clicks.
 
 ## Remaining work / limitations
 
@@ -96,6 +97,7 @@ Never retry a door command automatically after uncertain delivery.
   Export remains plaintext by design. SDK removal/telemetry opt-in needs a separate decision.
 - Audit legacy location-service cleanup, crash-guard recovery, host-validator fallback,
   Kotlin version/configuration flags, and unused resources before making broad deletions.
+
 
 
 

@@ -9,6 +9,7 @@ firebaseCrashlyticsGradle = "3.0.8"
 googleServices = "4.5.0"
 gradle = "9.4.1"
 gson = "2.14.0"
+junit = "4.13.2"
 kotlin = "2.4.21"
 kotlinxCoroutinesAndroid = "1.11.0"
 ksp = "2.3.9"
@@ -36,6 +37,7 @@ firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
 foundation = { module = "androidx.compose.foundation:foundation", version.ref = "compose" }
 gradle = { module = "com.android.tools.build:gradle", version.ref = "gradle" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+junit = { module = "junit:junit", version.ref = "junit" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
 lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycleProcess" }
 material = { module = "com.google.android.material:material", version.ref = "material" }

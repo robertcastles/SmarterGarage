@@ -53,6 +53,11 @@
         android:key="general"
         app:initialExpandedChildrenCount="2"
         app:title="@string/general">
+        <SwitchPreference
+            android:key="ai_assistant_enabled"
+            android:defaultValue="true"
+            android:title="Gemini / AI assistant support"
+            android:summary="Allow supported assistants to open, close, and check the selected garage through AppFunctions on Android 16+. Commands require an unlocked phone and confirmation. Gemini availability depends on Google's rollout; no always-on microphone." />
         <Preference
             android:key="increase_perimeter"
             android:title="Click to increase perimeter"

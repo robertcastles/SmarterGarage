@@ -14,6 +14,10 @@ import org.json.JSONObject
 
 object PreferenceUtility {
     private const val TAG = "PreferenceUtility"
+    const val AI_ASSISTANT_ENABLED = "ai_assistant_enabled"
+
+    fun isAiAssistantEnabled(context: Context): Boolean =
+        getSharedPreferencesSafe(context).getBoolean(AI_ASSISTANT_ENABLED, true)
 
     // Backup file format version. Bump only if the on-disk schema changes in a
     // way that older importers must reject/branch on.

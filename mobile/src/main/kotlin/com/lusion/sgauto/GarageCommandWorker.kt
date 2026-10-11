@@ -18,6 +18,12 @@ class GarageCommandWorker(
             val action = inputData.getString(EXTRA_ACTION)
             // Process interruption can leave delivery unknown. Do not replay door actions.
             if (action != ACTION_MONITOR && runAttemptCount > 0) return Result.failure()
+            if (inputData.getBoolean(GarageVoiceConfirmationActivity.EXTRA_ASSISTANT, false) &&
+                (!PreferenceUtility.isAiAssistantEnabled(applicationContext) ||
+                    !PreferenceUtility.getAccessKey(applicationContext) ||
+                    GarageUtility.garage_access_key != inputData.getString(GarageVoiceConfirmationActivity.EXTRA_DEVICE))) {
+                return Result.failure()
+            }
             if (action != null) {
                 // If the foreground service is already handling the command + polling,
                 // skip to avoid duplicate network calls

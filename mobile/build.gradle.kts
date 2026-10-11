@@ -20,7 +20,7 @@ android {
         // we're ready. Suppress the advisory "not targeting latest SDK" lint.
         //noinspection OldTargetApi,GradleDependency,ExpiredTargetSdkVersion
         targetSdk = 36
-        versionCode = 576
+        versionCode = 578
         versionName = "2025.${versionCode}"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -105,6 +105,9 @@ android {
 
 dependencies {
 
+    implementation("androidx.appfunctions:appfunctions:1.0.0-alpha10")
+    ksp("androidx.appfunctions:appfunctions-compiler:1.0.0-alpha10")
+
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.analytics)
@@ -129,7 +132,7 @@ dependencies {
     implementation(libs.ui.tooling.preview)
     implementation(libs.ui.tooling.preview.android)
     implementation(libs.work.runtime.ktx)
-    testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.junit)
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:${libs.versions.kotlinxCoroutinesAndroid.get()}")
     androidTestImplementation(libs.test.runner)
     androidTestImplementation(libs.test.junit)

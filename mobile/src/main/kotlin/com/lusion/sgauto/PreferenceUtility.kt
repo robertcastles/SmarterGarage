@@ -94,6 +94,9 @@ object PreferenceUtility {
         val sharedPref = getSharedPreferencesSafe(context)
         garage_access_key = sharedPref.getString("garage_device_id", "")?.trim().orEmpty()
         personal_access_token = sharedPref.getString("personal_access_token", "")?.trim().orEmpty()
+        if (sharedPref.getBoolean("debug_switch", false)) {
+            return garage_access_key.isNotBlank() && garage_access_key != "NONE"
+        }
         return isValidGUID(garage_access_key) && isValidGUID(personal_access_token)
     }
 
@@ -110,6 +113,9 @@ object PreferenceUtility {
         )
         garage_access_key = sharedPref.getString("garage_device_id", "")?.trim().orEmpty()
         personal_access_token = sharedPref.getString("personal_access_token", "")?.trim().orEmpty()
+        if (sharedPref.getBoolean("debug_switch", false)) {
+            return garage_access_key.isNotBlank() && garage_access_key != "NONE"
+        }
         if (!isValidGUID(garage_access_key) || !isValidGUID(personal_access_token)) {
             Log.e(TAG, "validGarageTokens: invalid garage tokens. key: $garage_access_key, token length: ${personal_access_token.length}")
             return false

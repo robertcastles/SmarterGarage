@@ -7,6 +7,7 @@ import com.lusion.sgauto.PreferenceUtility.getPreference
 import com.lusion.sgauto.PreferenceUtility.setPreference
 import okhttp3.ConnectionPool
 import okhttp3.Dns
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -319,7 +320,11 @@ object SmartThingsService {
     /** Grace period before an old client's dispatcher executor is actually shut down. */
     private const val EXECUTOR_SHUTDOWN_DELAY_MS = 10_000L
 
-    private fun createClient(context: Context, debugMode: Boolean): OkHttpClient {
+    private var diagnosticApi: SmartThingsApi? = null
+    private var diagnosticClient: OkHttpClient? = null
+    private var diagnosticUrl: HttpUrl? = null
+
+    private fun createClient(context: Context, debugMode: Boolean, endpoint: HttpUrl, diagnostic: Boolean = false): OkHttpClient {
         val builder = OkHttpClient.Builder()
             .dns(FallbackDns(context.applicationContext))  // Use custom DNS resolver
             .retryOnConnectionFailure(true)
@@ -333,13 +338,17 @@ object SmartThingsService {
             .writeTimeout(if (debugMode) 8 else 20, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 val appContext = context.applicationContext
-                val token = getPreference("personal_access_token", String::class.java, appContext) as? String
                 val originalRequest = chain.request()
                 val requestUrl = originalRequest.url.toString()
 
-                val requestBuilder = originalRequest.newBuilder()
-                if (!token.isNullOrEmpty() && originalRequest.header("Authorization") == null) {
-                    requestBuilder.addHeader("Authorization", "Bearer $token")
+                val requestBuilder = originalRequest.newBuilder().removeHeader("Authorization")
+                val authorization = NetworkPolicy.authorization(
+                    originalRequest.url, endpoint, debugMode, diagnostic,
+                    getPreference("personal_access_token", String::class.java, appContext) as? String ?: "",
+                    getPreference("debug_access_token", String::class.java, appContext) as? String ?: ""
+                )
+                if (authorization != null) {
+                    requestBuilder.header("Authorization", authorization)
                 }
                 
                 val request = requestBuilder.build()
@@ -405,8 +414,8 @@ object SmartThingsService {
     }
 
     @Synchronized
-    fun getInstance(context: Context, forceDebug: Boolean = false): SmartThingsApi {
-        val debugMode = (getPreference("debug_switch", Boolean::class.java, context) as? Boolean == true) || forceDebug
+    fun getInstance(context: Context): SmartThingsApi {
+        val debugMode = getPreference("debug_switch", Boolean::class.java, context) as? Boolean == true
         val currentBaseUrl = getSmartThingsURL(context, debugMode)
         
         if (currentBaseUrl != lastBaseUrl || debugMode != lastDebugMode) {
@@ -417,7 +426,8 @@ object SmartThingsService {
         }
 
         return instance ?: run {
-            val client = createClient(context, debugMode)
+            val endpoint = if (debugMode) NetworkPolicy.testUrl(currentBaseUrl) else NetworkPolicy.productionUrl
+            val client = createClient(context, debugMode, endpoint)
             currentClient = client
             Retrofit.Builder()
                 .baseUrl(currentBaseUrl)
@@ -426,6 +436,26 @@ object SmartThingsService {
                 .build()
                 .create(SmartThingsApi::class.java)
                 .also { instance = it }
+        }
+    }
+
+    /** Pings cannot mutate the garage client cache or carry any bearer credential. */
+    @Synchronized
+    fun getDiagnosticInstance(context: Context): SmartThingsApi {
+        val endpoint = NetworkPolicy.testUrl(getSmartThingsURL(context, true))
+        if (diagnosticUrl != endpoint) {
+            diagnosticClient?.connectionPool?.evictAll()
+            diagnosticClient?.dispatcher?.executorService?.shutdown()
+            diagnosticClient = null
+            diagnosticApi = null
+            diagnosticUrl = endpoint
+        }
+        return diagnosticApi ?: run {
+            val client = createClient(context, true, endpoint, diagnostic = true)
+            diagnosticClient = client
+            Retrofit.Builder().baseUrl(endpoint)
+                .addConverterFactory(GsonConverterFactory.create()).client(client).build()
+                .create(SmartThingsApi::class.java).also { diagnosticApi = it }
         }
     }
 
@@ -452,8 +482,7 @@ object SmartThingsService {
 
     private fun getSmartThingsURL(context: Context, debugMode: Boolean = false): String {
         return if (debugMode) {
-           (getPreference("debug_server", String::class.java, context) as? String) 
-               ?: "https://api.smartthings.com"
+           getPreference("debug_server", context, "https://10.0.2.2:3000")
         } else {
             "https://api.smartthings.com"
         }

@@ -246,7 +246,7 @@ class MainActivity : AppCompatActivity(), LocationListener, OnSharedPreferenceCh
         this.registerReceiver(
             uiMessageBroadcastReceiver,
             IntentFilter(getString(R.string.local_main_activity_listener)),
-            RECEIVER_EXPORTED
+            RECEIVER_NOT_EXPORTED
         )
         uiReceiverRegistered = true
     }
@@ -659,7 +659,12 @@ class MainActivity : AppCompatActivity(), LocationListener, OnSharedPreferenceCh
                     return
                 }
                 garageStatus.value = getLastGarageStatus(applicationContext)
-                when (val payloadGarageStatus = GarageStatus.valueOf(payload)) {
+                val payloadGarageStatus = GarageStatus.entries.firstOrNull { it.name == payload }
+                if (payloadGarageStatus == null) {
+                    Log.w(TAG, "Ignoring invalid garage status payload")
+                    return
+                }
+                when (payloadGarageStatus) {
                     GarageStatus.OPENING, GarageStatus.CLOSING -> {
                         triggerNotification(
                             applicationContext,

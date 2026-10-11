@@ -232,7 +232,7 @@ object GarageUtility {
                          additionalInfo = additionalInfo.takeIf { it != null } ?: ""
                      )
 
-                     val response = SmartThingsService.getInstance(context, forceDebug = true)
+                     val response = SmartThingsService.getDiagnosticInstance(context)
                          .sendPing(pingRequest)
 
                      if (response.isSuccessful) {

@@ -124,7 +124,7 @@
             android:contentDescription="Route all commands to the Debug server (bypassing SmartThings)"
             android:defaultValue="false"
             android:key="debug_switch"
-            android:summary="Route all commands to the Debug server"
+            android:summary="Route commands to the test server with TLS certificate and hostname checks disabled. Never uses the SmartThings token."
             android:title="Debug" />
         <SwitchPreference
             android:contentDescription="Send Debug Pings to the Debug server"
@@ -155,7 +155,15 @@
             android:singleLine="true"
             android:title="Debug server"
             app:dialogIcon="@drawable/smarter_garage_svg"
-            app:dialogMessage="The server and port of your test API service. Run test server over SSL" />
+            app:dialogMessage="HTTPS endpoint for home testing. Certificate and hostname verification are disabled for this endpoint; use only a trusted test network." />
+
+        <EditTextPreference
+            android:key="debug_access_token"
+            android:inputType="textPassword"
+            android:singleLine="true"
+            android:title="Test server token (optional)"
+            android:summary="Separate test credential for test API commands. Pings never carry a token."
+            app:dialogMessage="Use only a test credential, never your real SmartThings token." />
 
         <EditTextPreference
             android:id="@+id/locationUpdateRate"

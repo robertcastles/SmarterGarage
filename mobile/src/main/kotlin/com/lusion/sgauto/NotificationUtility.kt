@@ -542,6 +542,7 @@ object NotificationUtility {
         Log.i(TAG, "alertAutoActivity: sending intent to AutoUpdateRequestReceiver ${UpdateType.GARAGESTATUS} $garageStatus")
         context.sendBroadcast(dataResponseIntent)
         val autoAppIntent = Intent("com.lusion.sgauto.SGScreen").apply {
+            setPackage(context.packageName)
             putExtra("TYPE", UpdateType.GARAGESTATUS)
             putExtra(UpdateType.GARAGESTATUS.name, garageStatus)
         }
@@ -552,6 +553,7 @@ object NotificationUtility {
     fun alertMainActivity(context: Context, updateType: UpdateType, payload: String?) {
         Log.i(TAG, "alertMainActivity: ${updateType.name}, $payload")
         val alertAppIntent = Intent(context.getString(R.string.local_main_activity_listener)).apply {
+            setPackage(context.packageName)
             putExtra("Message", updateType.name)
             putExtra("Payload", payload)
         }
@@ -562,6 +564,7 @@ object NotificationUtility {
         Log.d(TAG, "LU.notifyMainActivity $message")
         // This simplified wrapper should send messages to MainActivity uiMessageBroadcastReceiver
         val intent = Intent(context.getString(R.string.local_main_activity_listener)).apply {
+            setPackage(context.packageName)
             putExtra("Message", message)
         }
         notifyMainActivity(context, intent)
@@ -575,7 +578,7 @@ object NotificationUtility {
         // Looks like we should get the garage status and trigger the notification as needed
         //getGarageStatus(context);
         // send broadcast
-        context.sendBroadcast(intent)
+        context.sendBroadcast(intent?.setPackage(context.packageName))
     }
 
 //    fun dismissNotification(context: Context, notificationId: Int) {

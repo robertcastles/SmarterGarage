@@ -197,6 +197,9 @@ disconnect, and no sampled overlapping Auto notifications. JVM suites contain 21
 passing tests; command-free host suites contain 26. Moving/reconnect retests remain
 blocked by intermittent native launcher/action input: `build/goal-moving-final/result.json`
 failed with zero requests and no OPEN receiver event. No native action was retried.
+Three updated-debug phone regressions also passed (October 11, 13:37 local report),
+each with fresh UI confirmation, exactly OPEN then CLOSE, and final CLOSED; fixture
+cleanup completed. Results remain in `build/phone-command-tests/result.json`.
 
 Reconnect navigation recreates/resumes the actual car-app session through its launcher
 before checking the status panel. If a notification action closes the panel, only the
@@ -221,5 +224,6 @@ and carrier were observed during the successful moving portion without sampled o
 - Instrumentation that sends an existing PendingIntent can test AUTO routing but
   cannot prove the real host's foreground-service-start exemption. Keep at least
   one DHU host-click scenario for end-to-end acceptance.
+
 
 

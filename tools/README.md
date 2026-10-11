@@ -182,6 +182,26 @@ app force-stop, asserts the latest CLOSED caption and recovered carrier, then pe
 a final CLOSED disconnect. Exact OPEN/CLOSE counts remain enforced throughout.
 This does not prove queued-before-dispatch command admission ownership.
 
+Service command execution is now owned by sibling service jobs, not the replaceable
+polling job. Admission is registered synchronously; monitor replacement and ordinary
+CLOSED stop requests cannot cancel queued commands. Stop requests defer while commands
+drain, and fresh observation is still required after dispatch. Actual destruction or
+system timeout remains a cancellation boundary; no uncertain command is replayed.
+Three JVM tests cover shared-mutex contention, independent monitor cancellation,
+multiple admitted commands, true owner cancellation, and handled failure without replay.
+This is in-process ownership, not durable exactly-once delivery or OS-process recovery.
+
+Updated-service regression: `build/goal-baseline-regression/result.json` passed
+one native OPEN/CLOSE cycle with fresh captions, exactly two requests, clean CLOSED
+disconnect, and no sampled overlapping Auto notifications. JVM suites contain 21
+passing tests; command-free host suites contain 26. Moving/reconnect retests remain
+blocked by intermittent native launcher/action input: `build/goal-moving-final/result.json`
+failed with zero requests and no OPEN receiver event. No native action was retried.
+
+Reconnect navigation recreates/resumes the actual car-app session through its launcher
+before checking the status panel. If a notification action closes the panel, only the
+toolbar navigation is retried for confirmation; OPEN/CLOSE actions are never retried.
+
 October 11 device evidence: `build/auto-moving-disconnect-stable/result.json`
 records exactly OPEN then CLOSE, fresh CLOSING at real disconnect, foreground
 monitoring until fresh CLOSED while detached, and CLOSED carrier repost on reconnect
@@ -201,3 +221,5 @@ and carrier were observed during the successful moving portion without sampled o
 - Instrumentation that sends an existing PendingIntent can test AUTO routing but
   cannot prove the real host's foreground-service-start exemption. Keep at least
   one DHU host-click scenario for end-to-end acceptance.
+
+

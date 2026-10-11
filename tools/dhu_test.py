@@ -302,6 +302,21 @@ def main():
             raise RuntimeError('Reconnect handshake timed out')
         send('focus video lock')
         checked_wait(7)
+        # Recreate/resume the app's real host session, not an artificial service start.
+        send('keycode home')
+        checked_wait(3)
+        for attempt in range(3):
+            controls = text_controls(screenshot(index))
+            matches = [item for item in controls if re.fullmatch(r'Smarter\s*\.{2,3}', item['text'], re.I)]
+            if len(matches) == 1:
+                send(f"tap {matches[0]['x']} {matches[0]['y']}")
+                break
+            if len(matches) > 1: raise RuntimeError('Ambiguous app launcher on reconnect')
+            send('tap 40 673')
+            checked_wait(5)
+        else:
+            raise RuntimeError('App launcher did not recover on reconnect')
+        checked_wait(25)
         deadline = time.monotonic() + 30
         while True:
             assert_auto_surface()
@@ -449,6 +464,7 @@ def main():
                     rf'Garage completed transition to final state \({final}\), stopping',
                     f'stopMonitoring: confirming final status={final} on status card'], since, 90)
                 deadline = time.monotonic() + 20
+                panel_attempts = 0
                 while True:
                     last_image = screenshot(index)
                     controls = text_controls(last_image)
@@ -459,6 +475,10 @@ def main():
                         confirmed = False
                     if confirmed:
                         break
+                    if not any(re.fullmatch('Smarter Garage', item['text'], re.I) for item in controls) and panel_attempts < 3:
+                        send('tap 40 62')
+                        panel_attempts += 1
+                        checked_wait(3)
                     if time.monotonic() >= deadline:
                         raise RuntimeError('Fresh app status did not appear as a distinct Auto notification caption')
                     fixture.check()
@@ -513,3 +533,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+

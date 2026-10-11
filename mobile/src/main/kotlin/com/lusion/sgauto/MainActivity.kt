@@ -130,6 +130,7 @@ class MainActivity : AppCompatActivity(), LocationListener, OnSharedPreferenceCh
     private val emptyLog: List<String>? = null
     private val logMessages = mutableStateOf(emptyLog)
     private var mService: LocationServiceUpdate? = null
+    private var locationSubscription: AutoCloseable? = null
 
     private var myLocationServiceBroadcastReceiver: MyLocationServiceBroadcastReceiver? = null
     private var uiReceiverRegistered = false
@@ -347,6 +348,7 @@ class MainActivity : AppCompatActivity(), LocationListener, OnSharedPreferenceCh
     }
 
     override fun onPause() {
+        stopLocationUpdates()
         super.onPause()
         val status = getLastGarageStatus(applicationContext)
         if (status != GarageStatus.OPENING && status != GarageStatus.CLOSING) {
@@ -376,6 +378,7 @@ class MainActivity : AppCompatActivity(), LocationListener, OnSharedPreferenceCh
 
 
     override fun onStop() {
+        stopLocationUpdates()
         super.onStop()
         val status = getLastGarageStatus(applicationContext)
         if (status != GarageStatus.OPENING && status != GarageStatus.CLOSING) {
@@ -531,10 +534,16 @@ class MainActivity : AppCompatActivity(), LocationListener, OnSharedPreferenceCh
 
     @SuppressLint("MissingPermission")
     private fun startLocationUpdates() {
-        LocationUtility.startLocationUpdates(
+        if (locationSubscription != null) return
+        locationSubscription = LocationUtility.startLocationUpdates(
             applicationContext,
             ::updateLocationDisplayAndShowDistance
         )
+    }
+
+    private fun stopLocationUpdates() {
+        locationSubscription?.close()
+        locationSubscription = null
     }
 
     @SuppressLint("StringFormatMatches")

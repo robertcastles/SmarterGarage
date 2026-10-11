@@ -8,17 +8,21 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Build
 import android.os.Looper
+import android.os.Handler
+import android.os.SystemClock
 import android.util.Log
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.annotation.RequiresPermission
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import java.util.concurrent.atomic.AtomicBoolean
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.location.*
 import com.google.android.gms.tasks.Task
-import com.lusion.sgauto.PreferenceUtility.getPreference
 import com.lusion.sgauto.PreferenceUtility.setPreference
 
 object LocationUtility {
@@ -27,7 +31,7 @@ object LocationUtility {
 
     fun initializeLocationClient(context: Context): FusedLocationProviderClient {
         if (mFusedLocationClient == null) {
-            mFusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+            mFusedLocationClient = LocationServices.getFusedLocationProviderClient(context.applicationContext)
         }
         return mFusedLocationClient!!
     }
@@ -75,37 +79,57 @@ object LocationUtility {
 
         val fusedLocationClient = initializeLocationClient(context)
 
-        // Try getCurrentLocation for a fresh fix (better than lastLocation which can be null/stale)
+        // Cancel replacement requests and any request whose UI owner stops.
+        homeRequests.remove(activity)?.close()
         val cts = com.google.android.gms.tasks.CancellationTokenSource()
-        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cts.token)
-            .addOnSuccessListener { location: Location? ->
-                if (location != null) {
-                    Log.i(TAG, "getCurrentLocation success: $location")
+        val active = AtomicBoolean(true)
+        val handler = Handler(Looper.getMainLooper())
+        lateinit var observer: DefaultLifecycleObserver
+        lateinit var timeout: Runnable
+        val subscription = AutoCloseable {
+            if (active.compareAndSet(true, false)) {
+                cts.cancel()
+                handler.removeCallbacks(timeout)
+                activity.lifecycle.removeObserver(observer)
+                homeRequests.remove(activity)
+            }
+        }
+        observer = object : DefaultLifecycleObserver {
+            override fun onStop(owner: LifecycleOwner) = subscription.close()
+        }
+        timeout = Runnable {
+            if (active.get()) {
+                subscription.close()
+                showToast(activity, "Location timed out; please try again")
+            }
+        }
+        homeRequests[activity] = subscription
+        activity.lifecycle.addObserver(observer)
+        handler.postDelayed(timeout, 30_000L)
+        val request = CurrentLocationRequest.Builder()
+            .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+            .setMaxUpdateAgeMillis(15_000L)
+            .setDurationMillis(30_000L)
+            .build()
+        fusedLocationClient.getCurrentLocation(request, cts.token)
+            .addOnSuccessListener { location ->
+                if (!active.get()) return@addOnSuccessListener
+                subscription.close()
+                val ageMs = location?.let { (SystemClock.elapsedRealtimeNanos() - it.elapsedRealtimeNanos) / 1_000_000 }
+                if (location != null && ageMs != null && ageMs in 0..15_000 &&
+                    location.hasAccuracy() && location.accuracy <= 100f) {
                     setHomeWithLocation(location, context)
                     showToast(activity, "Home location set")
                     SettingsActivity.refreshGeofenceUI()
                 } else {
-                    // Fall back to lastLocation
-                    Log.d(TAG, "getCurrentLocation returned null, trying lastLocation")
-                    fusedLocationClient.lastLocation.addOnCompleteListener { task: Task<Location?> ->
-                        val lastLoc = task.result
-                        if (lastLoc != null) {
-                            setHomeWithLocation(lastLoc, context)
-                            showToast(activity, "Home location set")
-                            SettingsActivity.refreshGeofenceUI()
-                        } else {
-                            Log.d(TAG, "lastLocation also null, requesting location updates")
-                            showToast(activity, "Waiting for location fix, please try again in a moment")
-                            // Kick off a location update so a future attempt will work
-                            val locationRequest = createLocationRequest(context)
-                            fusedLocationClient.requestLocationUpdates(locationRequest, mSetHomeLocationCallback, Looper.myLooper())
-                        }
-                    }
+                    showToast(activity, "No accurate fresh location; please try again")
                 }
-            }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "getCurrentLocation failed", e)
-                showToast(activity, "Failed to get location: ${e.message}")
+            }.addOnFailureListener { e ->
+                if (active.get()) {
+                    subscription.close()
+                    Log.e(TAG, "getCurrentLocation failed", e)
+                    showToast(activity, "Failed to get location; please try again")
+                }
             }
     }
 
@@ -118,9 +142,6 @@ object LocationUtility {
         }
 
         if (location == null) {
-            val locationRequest = createLocationRequest(context)
-            val fusedLocationClient = initializeLocationClient(context)
-            fusedLocationClient.requestLocationUpdates(locationRequest, mSetHomeLocationCallback, Looper.myLooper())
             return
         }
 
@@ -130,34 +151,46 @@ object LocationUtility {
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     @SuppressLint("MissingPermission")
-    fun startLocationUpdates(context: Context, onLocationUpdated: (Location) -> Unit ) {
+    fun startLocationUpdates(context: Context, onLocationUpdated: (Location) -> Unit ): AutoCloseable {
         Log.d(TAG, "startLocationUpdates")
         val fusedLocationClient = initializeLocationClient(context)
+        val active = AtomicBoolean(true)
         val locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 // Only use the most recent location. When Android unfreezes the app
                 // it delivers all queued locations at once, causing a flood of
                 // notification/UI update calls. We only need the latest position.
-                locationResult.lastLocation?.let { onLocationUpdated(it) }
+                if (active.get()) locationResult.lastLocation?.let { onLocationUpdated(it) }
             }
         }
 
         val locationRequest = createLocationRequest(context)
         if (!permissionGranted(context, Manifest.permission.ACCESS_FINE_LOCATION) || !permissionGranted(context, Manifest.permission.ACCESS_COARSE_LOCATION)) {
-            return
+            return AutoCloseable { active.set(false) }
         }
 
-        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.myLooper())
+        val subscription = AutoCloseable {
+            if (active.compareAndSet(true, false)) {
+                fusedLocationClient.removeLocationUpdates(locationCallback)
+                    .addOnFailureListener { Log.w(TAG, "Failed to remove location updates", it) }
+            }
+        }
+        fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+            .addOnSuccessListener {
+                // Removal may race asynchronous registration: remove again once registered.
+                if (!active.get()) fusedLocationClient.removeLocationUpdates(locationCallback)
+            }
+            .addOnFailureListener {
+                subscription.close()
+                Log.w(TAG, "Failed to register location updates", it)
+            }
+        return subscription
     }
 
     fun createLocationRequest(context: Context): LocationRequest {
         Log.i(TAG, "createLocationRequest")
-        var locationUpdateRate = try {
-            getPreference("locationUpdateRate", Int::class.java, context) as Int
-        } catch (_: Exception) {
-            50  // default to 50 if no rate set
-        }
-        if (locationUpdateRate < 2) locationUpdateRate = 2
+        var locationUpdateRate = PreferenceUtility.getSharedPreferences(context).all["locationUpdateRate"]
+            ?.toString()?.toIntOrNull()?.coerceIn(2, 3600) ?: 50
         locationUpdateRate *= 1000
         return LocationRequest.Builder(locationUpdateRate.toLong())
             .setMinUpdateIntervalMillis((locationUpdateRate / 2).toLong())
@@ -174,11 +207,5 @@ object LocationUtility {
         }
     }
 
-    private val mSetHomeLocationCallback: LocationCallback = object : LocationCallback() {
-        override fun onLocationResult(locationResult: LocationResult) {
-            Log.i(TAG, "mSetHomeLocationCallback: onLocationResult")
-            val mLastLocation = locationResult.lastLocation
-            setPreference("home", mLastLocation, SGAutoApp.getAppContext())
-        }
-    }
+    private val homeRequests = java.util.WeakHashMap<AppCompatActivity, AutoCloseable>()
 }

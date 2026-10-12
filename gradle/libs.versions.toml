@@ -1,6 +1,7 @@
 [versions]
 activityCompose = "1.13.0"
 androidx-appcompat = "1.8.0"
+appfunctions = "1.0.0-alpha13"
 car-app = "1.7.0"
 compose = "1.12.1"
 coreKtx = "1.19.1"
@@ -28,6 +29,8 @@ uiAutomator = "2.4.0"
 [libraries]
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 appcompat = { module = "androidx.appcompat:appcompat", version.ref = "androidx-appcompat" }
+appfunctions = { module = "androidx.appfunctions:appfunctions", version.ref = "appfunctions" }
+appfunctions-compiler = { module = "androidx.appfunctions:appfunctions-compiler", version.ref = "appfunctions" }
 car-app = { module = "androidx.car.app:app", version.ref = "car-app" }
 converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "retrofit" }
 core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }

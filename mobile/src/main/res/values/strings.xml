@@ -96,6 +96,13 @@
     <string name="geofence_dwelled">Geofence dwelled</string>
     <string name="api_key_hint">Your SmartThings personal access token (PAT)</string>
     <string name="personal_access_token_hint">Your SmartThings personal access token(PAT)</string>
+    <string name="smartthings_token_help_title">Get a SmartThings token ↗</string>
+    <string name="smartthings_token_help_summary">Sign in, generate a token with List, Read, and Execute permissions for devices, then paste it above and select your garage. Check the token expiry; expired tokens must be replaced.</string>
+    <string name="smartthings_token_help_collapsed">Token missing or malformed. Tap for setup help.</string>
+    <string name="smartthings_token_page">Open token page</string>
+    <string name="assistant_summary">Voice controls on supported devices</string>
+    <string name="assistant_help_title">Gemini / AI assistant help</string>
+    <string name="assistant_help_details">Allow supported assistants to open, close, and check the selected garage through AppFunctions on Android 16+. Commands require an unlocked phone and confirmation. Gemini availability depends on Google\'s rollout; no always-on microphone.</string>
     <string name="locationUpdateRate_hint">Location update rate in seconds</string>
     <string name="test">Test</string>
     <string name="geofence_indicator">Geofence indicator</string>

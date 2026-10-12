@@ -24,9 +24,17 @@
             android:selectAllOnFocus="true"
             android:singleLine="true"
             android:title="Personal Access Token"
+            app:allowDividerBelow="false"
             app:dialogIcon="@drawable/smarter_garage_svg"
             app:dialogMessage="Your SmartThings Personal Access Token"
             app:icon="@drawable/exclamation" />
+        <Preference
+            android:key="smartthings_token_help"
+            android:persistent="false"
+            app:layout="@layout/preference_inline_help"
+            app:allowDividerAbove="false"
+            android:title="@string/smartthings_token_help_title"
+            android:summary="@string/smartthings_token_help_collapsed" />
 <!--        <EditTextPreference-->
 <!--            android:id="@+id/garage_device_id"-->
 <!--            android:autofillHints="Garage device ID(base-garage-door)"-->
@@ -51,13 +59,20 @@
 
     <PreferenceCategory
         android:key="general"
-        app:initialExpandedChildrenCount="2"
+        app:initialExpandedChildrenCount="3"
         app:title="@string/general">
         <SwitchPreference
             android:key="ai_assistant_enabled"
             android:defaultValue="true"
             android:title="Gemini / AI assistant support"
-            android:summary="Allow supported assistants to open, close, and check the selected garage through AppFunctions on Android 16+. Commands require an unlocked phone and confirmation. Gemini availability depends on Google's rollout; no always-on microphone." />
+            app:allowDividerBelow="false"
+            android:summary="@string/assistant_summary" />
+        <Preference
+            android:key="assistant_help"
+            android:persistent="false"
+            app:layout="@layout/preference_inline_help"
+            app:allowDividerAbove="false"
+            android:title="@string/assistant_help_title" />
         <Preference
             android:key="increase_perimeter"
             android:title="Click to increase perimeter"

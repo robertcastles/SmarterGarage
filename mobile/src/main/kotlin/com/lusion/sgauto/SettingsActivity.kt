@@ -178,6 +178,14 @@ class SettingsActivity : AppCompatActivity() {
             ActivityResultContracts.OpenDocument()
         ) { uri: Uri? -> if (uri != null) readBackupFrom(uri) }
 
+        private fun updateSmartThingsHelp(token: String?) {
+            findPreference<Preference>("smartthings_token_help")?.apply {
+                isVisible = true
+                summary = if (LusionUtility.isValidGUID(token?.trim())) null
+                    else getString(R.string.smartthings_token_help_collapsed)
+            }
+        }
+
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             mPreferenceFragmentCompat = this
             preferenceManager?.setStorageDeviceProtected()
@@ -185,6 +193,31 @@ class SettingsActivity : AppCompatActivity() {
             val editTextHeightInDP = 48
             val etHeightInPx = (editTextHeightInDP * scale).toInt()
             setPreferencesFromResource(R.xml.root_preferences, rootKey)
+            findPreference<Preference>("smartthings_token_help")?.setOnPreferenceClickListener {
+                androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.smartthings_token_help_title)
+                    .setMessage(R.string.smartthings_token_help_summary)
+                    .setPositiveButton(R.string.smartthings_token_page) { _, _ ->
+                        val url = "https://account.smartthings.com/tokens"
+                        try {
+                            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url)))
+                        } catch (_: android.content.ActivityNotFoundException) {
+                            androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                                .setMessage(url).setPositiveButton(android.R.string.ok, null).show()
+                        }
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+                true
+            }
+            findPreference<Preference>("assistant_help")?.setOnPreferenceClickListener {
+                androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.assistant_help_title)
+                    .setMessage(R.string.assistant_help_details)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+                true
+            }
             val homePref = findPreference<Preference>("set_home")
             if (homePref == null) {
                 Log.w(TAG, "Could not find homePref set_home")
@@ -260,6 +293,7 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             val patETP = findPreference<EditTextPreference>("personal_access_token")
+            updateSmartThingsHelp(patETP?.text)
             val garageDeviceLP = findPreference<ListPreference>("garage_device_id")
             if(garageDeviceLP!!.value !=null)
             {
@@ -290,6 +324,7 @@ class SettingsActivity : AppCompatActivity() {
                 // TODO: Add some validation to the provided token to confirm access and notify if garages are found
                 patETP.onPreferenceChangeListener =
                     Preference.OnPreferenceChangeListener { _: Preference, newValue: Any? ->
+                        updateSmartThingsHelp(newValue as? String)
                         if (checkIfGUID(patETP, newValue as String)) {
                             setPrefProps(PrefProps(null, patETP, "", R.drawable.checkmark))
                             val context = activity?.applicationContext

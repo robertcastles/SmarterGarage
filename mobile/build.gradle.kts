@@ -10,17 +10,21 @@ plugins {
 
 android {
     namespace = "com.lusion.sgauto"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 2
+        }
+    }
 
     defaultConfig {
         applicationId = "com.lusion.sgauto"
         minSdk = 29
-        // Intentionally pinned to 36 (compileSdk is 37). Bumping targetSdk opts into
+        // Intentionally pinned to 36 (compileSdk is 37.2). Bumping targetSdk opts into
         // new OS behavior changes and needs deliberate testing, so this stays until
         // we're ready. Suppress the advisory "not targeting latest SDK" lint.
         //noinspection OldTargetApi,GradleDependency,ExpiredTargetSdkVersion
         targetSdk = 36
-        versionCode = 579
+        versionCode = 584
         versionName = "2025.${versionCode}"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -133,7 +137,7 @@ dependencies {
     implementation(libs.ui.tooling.preview.android)
     implementation(libs.work.runtime.ktx)
     testImplementation(libs.junit)
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:${libs.versions.kotlinxCoroutinesAndroid.get()}")
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.test.runner)
     androidTestImplementation(libs.test.junit)
     androidTestImplementation(libs.test.uiautomator)

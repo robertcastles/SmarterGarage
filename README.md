@@ -48,7 +48,7 @@ means queued, not physical completion; check status to confirm movement. A fresh
 status response includes its API receipt time; failed/skipped/timed-out queries
 return **unconfirmed**, never cached state presented as current.
 
-AppFunctions is experimental (`1.0.0-alpha10`). Google's current documentation
+AppFunctions is pre-release (`1.0.0-rc01`). Google's current documentation
 describes Gemini integration as a private preview with trusted testers; installing
 this app does **not** guarantee Gemini discovery, spoken replies, or Android Auto
 voice support. Older Android versions retain all existing manual controls but
@@ -114,11 +114,39 @@ For owner-managed release signing, copy `keystore.properties.template` to the ig
 
 Keep the keystore outside the repository. Never commit keystores, passwords, private keys, or developer configuration. The repository owner generates the final signed Play AAB manually when ready; ordinary local validation uses debug variants only. Do not bump `versionCode` without an explicit request for a new Play-deliverable version.
 
+## Notification location recovery
+
+When Android Auto connects, the delayed startup heads-up uses the latest garage
+status even if the door changes state during the startup delay or location lookup.
+Disconnecting cancels the pending heads-up. Existing distance, cooldown, and
+single-notification safeguards still apply. Stable cached startup readings are
+labeled **last known** until a fresh status check completes in that car session;
+this label is removed even when the confirmed status is unchanged.
+
+The garage controls appear at home and remain visible away from home only while
+the garage is confirmed open or moving. Car connection checks location before
+skipping monitoring on a saved outside/closed state. While a car session is active,
+location is checked again roughly every 30 seconds to recover missed geofence transitions.
+These checks use fixes at most 15 seconds old with accuracy of 100 meters or better;
+fixes whose accuracy overlaps the fence boundary, or which predate a newly received
+transition, do not change the saved state. Foreground phone location updates use
+the same safeguards.
+
+Location availability and Android background restrictions can delay recovery;
+the periodic background worker is a fallback, not a guaranteed 15-minute deadline.
+Location reconciliation decisions are included in the local diagnostic log.
+
 ## Sharing and diagnostics
+
+Android Auto service/screen lifecycle logs and caught warning/error stack traces
+are saved locally through `PersistentLog`, alongside garage and notification logs.
+The files are `sgauto_persistent_log.txt` and `sgauto_persistent_log.old.txt` in the
+app's external-files directory (`/sdcard/Android/data/com.lusion.sgauto/files`).
+Logging is best-effort and rotates at roughly 2 MB per file; older entries are
+eventually overwritten. These files can retain app-side diagnostics after
+Android's system log buffers have rotated, but do not capture all Android Auto
+host errors or prove a notification was displayed.
 
 IDE state, local configuration, diagnostic logs, settings exports, and generated applications are excluded from Git. These files can contain credentials, device identifiers, locations, or private-network details.
 
 Before sharing a log, screenshot, or exported settings file, review and redact it. Settings exports can include the SmartThings token and home location. Ignore rules are not a substitute for reviewing the files staged for a commit.
-
-
-

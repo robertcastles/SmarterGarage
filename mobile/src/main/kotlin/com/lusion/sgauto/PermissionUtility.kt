@@ -27,6 +27,9 @@ object PermissionUtility {
     /** Set to true after we show the battery optimization dialog this session. */
     private var batteryOptimizationRequested = false
 
+    /** Set to true after we prompt for Nearby Devices (Bluetooth) this session. */
+    private var bluetoothConnectRequested = false
+
     fun permissionGranted(context: Context, permissionName: String): Boolean {
         return ContextCompat.checkSelfPermission(context, permissionName) == PackageManager.PERMISSION_GRANTED
     }
@@ -41,6 +44,47 @@ object PermissionUtility {
 
     fun checkLocationPermissions(context: Context): Boolean {
         return isFineLocationGranted(context) && isBackgroundLocationGranted(context)
+    }
+
+    fun isBluetoothConnectGranted(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.BLUETOOTH_CONNECT
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    fun requestBluetoothConnectPermissionIfNeeded(activity: AppCompatActivity): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
+        if (isBluetoothConnectGranted(activity)) {
+            bluetoothConnectRequested = false
+            return false
+        }
+        if (bluetoothConnectRequested) {
+            Log.d(TAG, "Bluetooth connect permission already requested this session")
+            return false
+        }
+        bluetoothConnectRequested = true
+        AlertDialog.Builder(activity)
+            .setTitle("Nearby Devices (Android Auto)")
+            .setMessage(
+                "Smarter Garage uses Nearby Devices permission to wake up when your car's " +
+                "Bluetooth connects so your Android Auto garage notification appears automatically."
+            )
+            .setPositiveButton("Allow") { _, _ ->
+                ActivityCompat.requestPermissions(
+                    activity,
+                    arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
+                    Constants.BLUETOOTH_CONNECT_REQUEST
+                )
+            }
+            .setNegativeButton("Not Now") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .setCancelable(true)
+            .create()
+            .show()
+        return true
     }
 
     // ---- Battery optimization (Doze / Samsung Freecess / MARs) ----

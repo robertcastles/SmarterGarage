@@ -17,6 +17,7 @@
     <string name="garage_auto_channel_name">Android Auto Status</string>
     <string name="garage_auto_channel_desc">Silent status carrier shown while Android Auto is connected</string>
     <string name="garage_auto_status_title">Android Auto garage status</string>
+    <string name="garage_status_last_known">%1$s (last known)</string>
     <!-- Arrival heads-up: a high-importance one-shot notification that "peeks" on the
          Android Auto screen when you enter the geofence, surfacing OPEN/CLOSE without
          needing to open the app. Auto-dismisses shortly after. -->

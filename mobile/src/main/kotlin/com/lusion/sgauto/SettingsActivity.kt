@@ -47,6 +47,7 @@ import retrofit2.Response
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.core.net.toUri
 
 class SettingsActivity : AppCompatActivity() {
     private class PrefProps(
@@ -102,6 +103,11 @@ class SettingsActivity : AppCompatActivity() {
                     Log.d(TAG, "Background location not granted by system prompt")
                 }
                 refreshGeofenceUI()
+                requestNextMissingPermission()
+            }
+
+            Constants.BLUETOOTH_CONNECT_REQUEST -> {
+                requestNextMissingPermission()
             }
         }
     }
@@ -156,9 +162,11 @@ class SettingsActivity : AppCompatActivity() {
         }
         // 2. Location permissions (fine → background, with settings fallback)
         if (PermissionUtility.requestNextLocationPermission(this)) return
-        // 3. Battery optimization exemption (critical for Samsung Freecess/MARs)
+        // 3. Nearby devices / Bluetooth permission (Android 12+) — wakes app on car BT connect for Android Auto
+        if (PermissionUtility.requestBluetoothConnectPermissionIfNeeded(this)) return
+        // 4. Battery optimization exemption (critical for Samsung Freecess/MARs)
         if (PermissionUtility.requestBatteryOptimizationExemption(this)) return
-        // 4. Samsung-specific "Never sleeping apps" guidance (one-time prompt)
+        // 5. Samsung-specific "Never sleeping apps" guidance (one-time prompt)
         if (PermissionUtility.promptSamsungUnrestrictedIfNeeded(this)) return
         // All permissions granted
         Log.d(TAG, "All permissions granted")
@@ -200,7 +208,8 @@ class SettingsActivity : AppCompatActivity() {
                     .setPositiveButton(R.string.smartthings_token_page) { _, _ ->
                         val url = "https://account.smartthings.com/tokens"
                         try {
-                            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url)))
+                            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                                url.toUri()))
                         } catch (_: android.content.ActivityNotFoundException) {
                             androidx.appcompat.app.AlertDialog.Builder(requireContext())
                                 .setMessage(url).setPositiveButton(android.R.string.ok, null).show()

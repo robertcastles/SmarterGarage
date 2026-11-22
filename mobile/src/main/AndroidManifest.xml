@@ -133,6 +133,9 @@
             tools:ignore="ExportedReceiver">
             <intent-filter>
                 <action android:name="androidx.car.app.connection.action.CAR_CONNECTION_UPDATED" />
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+                <action android:name="android.bluetooth.headset.profile.action.CONNECTION_STATE_CHANGED" />
+                <action android:name="android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
         <service

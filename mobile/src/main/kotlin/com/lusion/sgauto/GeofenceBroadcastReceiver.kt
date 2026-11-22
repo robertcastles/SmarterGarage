@@ -13,12 +13,11 @@ import androidx.work.WorkRequest
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofenceStatusCodes
 import com.google.android.gms.location.GeofencingEvent
-import com.lusion.sgauto.GarageUtility.GarageStatus
 import com.lusion.sgauto.GarageUtility.getLastGarageStatus
 import com.lusion.sgauto.GeofenceUtility.logGeofence
 import com.lusion.sgauto.NotificationUtility.dismissNotification
 import com.lusion.sgauto.NotificationUtility.triggerNotification
-import com.lusion.sgauto.PreferenceUtility.setPreference
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -60,7 +59,7 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
     }
 
     private fun handleTransition(context: Context, type: String, logMessage: String) {
-        setPreference("geofenceMessage", type, context)
+        GeofenceUtility.recordGeofenceTransition(context, type)
         logGeofence(context, logMessage)
 
         // ENTERED or DWELLING
@@ -86,7 +85,7 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
      * will self-correct shortly after if the immediate cached-status decision was wrong.
      */
     private fun handleExitTransition(context: Context) {
-        setPreference("geofenceMessage", "EXITED", context)
+        GeofenceUtility.recordGeofenceTransition(context, "EXITED")
         logGeofence(context, "DISMISS")
 
         val cachedStatus = getLastGarageStatus(context)
@@ -101,11 +100,16 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 GarageUtility.makeStatusRequest(appContext, ignoreTimers = true, "$TAG-exitProbe")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "handleExitTransition: fresh status probe failed: ${e.message}")
             } finally {
-                monitorGarage(appContext)
-                pendingResult.finish()
+                try {
+                    monitorGarage(appContext)
+                } finally {
+                    pendingResult.finish()
+                }
             }
         }
     }

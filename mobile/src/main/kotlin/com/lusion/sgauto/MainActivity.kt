@@ -563,7 +563,12 @@ class MainActivity : AppCompatActivity(), LocationListener, OnSharedPreferenceCh
         val distanceInMeters = calculateDistance(currentLocation, homeLocation)
         val fenceRadius = getFenceRadius()
 
-        updateGeofenceStatus(distanceInMeters, fenceRadius)
+        val inside = GeofenceUtility.insideFromLocation(currentLocation, distanceInMeters.toFloat(), fenceRadius)
+        if (inside != null) {
+            updateGeofenceStatus(inside)
+        } else {
+            Log.i(TAG, "showDistance: retaining geofence state; fix is stale, inaccurate, ambiguous, or older than a transition")
+        }
         updateDistanceText(distanceInMeters, fenceRadius)
     }
 
@@ -588,8 +593,7 @@ class MainActivity : AppCompatActivity(), LocationListener, OnSharedPreferenceCh
         return radius ?: INITIAL_RADIUS
     }
 
-    private fun updateGeofenceStatus(distanceInMeters: Double, fenceRadius: Int) {
-        val isNowInside = distanceInMeters <= fenceRadius
+    private fun updateGeofenceStatus(isNowInside: Boolean) {
         val wasInside = geofenceIndicator.value
 
         // Only run the log/notify side effects on an ACTUAL enter/exit transition, not
@@ -607,7 +611,7 @@ class MainActivity : AppCompatActivity(), LocationListener, OnSharedPreferenceCh
                 // value until the OS GeofencingClient's own EXIT broadcast eventually
                 // arrives (which can lag well behind this faster foreground check),
                 // wrongly keeping/resurrecting the notification in the meantime.
-                setPreference("geofenceMessage", "EXITED", applicationContext)
+                GeofenceUtility.recordGeofenceTransition(applicationContext, "EXITED")
                 logGeofence(applicationContext, "EXITED UI")
                 runOnUiThread { loadLogTVFromPreferences() }
                 // Only keep the notification for a CONFIRMED open/moving door — UNKNOWN
@@ -624,7 +628,7 @@ class MainActivity : AppCompatActivity(), LocationListener, OnSharedPreferenceCh
         } else {
             if (!wasInside) {
                 Log.i(TAG, "showDistance: ENTERED UI")
-                setPreference("geofenceMessage", "ENTERED", applicationContext)
+                GeofenceUtility.recordGeofenceTransition(applicationContext, "ENTERED")
                 logGeofence(applicationContext, "ENTERED")
                 triggerNotification(applicationContext, LusionUtility.UpdateType.GEOFENCE, null)
                 runOnUiThread { loadLogTVFromPreferences() }
@@ -649,7 +653,7 @@ class MainActivity : AppCompatActivity(), LocationListener, OnSharedPreferenceCh
         private val uiMessageBroadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             runOnUiThread { loadLogTVFromPreferences() }
-            var message = intent.getStringExtra("Message")
+            val message = intent.getStringExtra("Message")
             val payload = intent.getStringExtra("Payload")
             Log.i(TAG, "uiMessageBroadcastReceiver.onReceive: $message")
             if (message == null) {
@@ -694,14 +698,11 @@ class MainActivity : AppCompatActivity(), LocationListener, OnSharedPreferenceCh
             }
             // Update UI when receiving geofence message
             if (message.startsWith("ENTERED") || message.startsWith("DWELLING")) {
-                if (message.startsWith("ENTERED")) message = "ENTERED"
-                if (message.startsWith("DWELLING")) message = "DWELLING"
                 geofenceIndicator.value = true
-                geofenceStatusText.value = message
+                geofenceStatusText.value = if (message.startsWith("ENTERED")) "ENTERED" else "DWELLING"
             } else if (message.startsWith("EXITED")) {
-                message = "EXITED"
                 geofenceIndicator.value = false
-                geofenceStatusText.value = message
+                geofenceStatusText.value = "EXITED"
             }
             if (intent.action != null) {
                 when (intent.action) {

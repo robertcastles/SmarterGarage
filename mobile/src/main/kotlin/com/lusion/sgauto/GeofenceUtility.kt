@@ -7,8 +7,9 @@ import android.content.Context
 import android.content.Intent
 import android.location.LocationManager
 import android.os.Build
+import android.os.SystemClock
 import android.text.TextUtils
-import android.util.Log
+import com.lusion.sgauto.PersistentLog as Log
 import android.widget.Toast
 import android.location.Location
 import androidx.annotation.RequiresPermission
@@ -18,6 +19,9 @@ import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.CurrentLocationRequest
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import com.lusion.sgauto.GarageUtility.getLastGarageStatus
 import com.lusion.sgauto.MainActivity.PendingGeofenceTask
 import com.lusion.sgauto.NotificationUtility.GEOFENCES_ADDED
@@ -33,14 +37,68 @@ import com.lusion.sgauto.PreferenceUtility.getSharedPreferences
 import com.lusion.sgauto.PreferenceUtility.setPreference
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.time.Duration.Companion.milliseconds
 
 object GeofenceUtility {
     private const val TAG = "GeofenceUtility"
     private var geofencePendingIntent: PendingIntent? = null
     private var geofencingClient: GeofencingClient? = null
+    private val reconciliationMutex = Mutex()
+    private var latestTransitionNanos = 0L
+    private val carLocationScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var carLocationJob: Job? = null
+
+    @Synchronized
+    fun recordGeofenceTransition(context: Context, state: String) {
+        latestTransitionNanos = SystemClock.elapsedRealtimeNanos()
+        setPreference("geofenceMessage", state, context)
+    }
+
+    @Synchronized
+    fun insideFromLocation(location: Location, distanceMeters: Float, radiusMeters: Int): Boolean? =
+        GeofenceLocationPolicy.inside(
+            (SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000L,
+            location.accuracy.takeIf { location.hasAccuracy() },
+            distanceMeters, radiusMeters, location.elapsedRealtimeNanos, latestTransitionNanos
+        )
+
+    @Synchronized
+    fun startCarSessionMonitoring(context: Context) {
+        if (!LusionUtility.isInCarSession || carLocationJob?.isActive == true) return
+        val appContext = context.applicationContext
+        carLocationJob = carLocationScope.launch {
+            while (isActive && LusionUtility.isInCarSession) {
+                delay(30_000L.milliseconds)
+                if (!LusionUtility.isInCarSession) break
+                reconcileGeofenceStateWithLocation(appContext)
+                if (!GarageUtility.foregroundServicePolling.get() &&
+                    !GarageUtility.isInsideGeofence(appContext) &&
+                    GarageUtility.shouldKeepNotificationOnGeofenceExit(getLastGarageStatus(appContext))) {
+                    GarageUtility.makeStatusRequest(appContext, ignoreTimers = true, "CarGeofenceMonitor")
+                }
+                NotificationUtility.refreshNotificationBasedOnGeofence(appContext)
+            }
+        }
+    }
+
+    @Synchronized
+    fun stopCarSessionMonitoring() {
+        carLocationJob?.cancel()
+        carLocationJob = null
+    }
 
     @SuppressLint("UnspecifiedImmutableFlag")
     fun getGeofencePendingIntent(context: Context?): PendingIntent? {
@@ -307,38 +365,47 @@ object GeofenceUtility {
      * happens to correct it (like manually opening the app, which re-arms the
      * geofence and forces an INITIAL_TRIGGER re-evaluation).
      *
-     * This compares the device's actual last-known location against the home
-     * geofence and self-corrects the cached state (mirroring exactly what
-     * GeofenceBroadcastReceiver/MainActivity's foreground check would have done)
-     * if they disagree. Called from GarageStatusWorker's periodic 15-minute cycle,
-     * so a missed transition self-heals within at most ~15 minutes instead of
-     * indefinitely.
+     * Uses a bounded current-location request. Old, inaccurate, boundary-ambiguous,
+     * or pre-transition fixes must never overwrite a newer geofence event.
+     * Also runs on car connection and roughly every 30 seconds during an active car session;
+     * periodic WorkManager execution alone does not provide a recovery deadline.
      */
     @SuppressLint("MissingPermission")
-    suspend fun reconcileGeofenceStateWithLocation(context: Context) {
+    suspend fun reconcileGeofenceStateWithLocation(context: Context) = reconciliationMutex.withLock {
         val appContext = context.applicationContext
         if (!permissionGranted(appContext, Manifest.permission.ACCESS_FINE_LOCATION) &&
             !permissionGranted(appContext, Manifest.permission.ACCESS_COARSE_LOCATION)) {
-            return
+            return@withLock
         }
-        val homeLocation = getHomeLocation(appContext) ?: return
+        val homeLocation = getHomeLocation(appContext) ?: return@withLock
         val radius = (getPreference("radius", Int::class.java, appContext) as? Int) ?: 500
 
         val fusedLocationClient = LocationUtility.initializeLocationClient(appContext)
+        val cancellation = CancellationTokenSource()
         val currentLocation = try {
-            withTimeoutOrNull(5000L) {
+            withTimeoutOrNull(12_000L.milliseconds) {
                 suspendCancellableCoroutine<Location?> { cont ->
-                    fusedLocationClient.lastLocation
-                        .addOnSuccessListener { loc -> if (cont.isActive) cont.resume(loc, null) }
-                        .addOnFailureListener { if (cont.isActive) cont.resume(null, null) }
+                    cont.invokeOnCancellation { cancellation.cancel() }
+                    val request = CurrentLocationRequest.Builder()
+                        .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+                        .setMaxUpdateAgeMillis(GeofenceLocationPolicy.MAX_AGE_MS)
+                        .setDurationMillis(10_000L)
+                        .build()
+                    fusedLocationClient.getCurrentLocation(request, cancellation.token)
+                        .addOnSuccessListener { loc -> if (cont.isActive) cont.resume(loc) { _, _, _ -> } }
+                        .addOnFailureListener { error -> if (cont.isActive) cont.resumeWith(Result.failure(error)) }
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "reconcileGeofenceStateWithLocation: location fetch failed: ${e.message}")
             null
+        } finally {
+            cancellation.cancel()
         } ?: run {
-            Log.d(TAG, "reconcileGeofenceStateWithLocation: no last-known location available, skipping")
-            return
+            Log.w(TAG, "reconcileGeofenceStateWithLocation: no current fix; retaining geofence state")
+            return@withLock
         }
 
         val results = FloatArray(3)
@@ -347,37 +414,30 @@ object GeofenceUtility {
             homeLocation.latitude, homeLocation.longitude, results
         )
         val distance = results[0]
-        val actuallyInside = distance <= radius
-        val cachedInside = GarageUtility.isInsideGeofence(appContext)
-
-        if (actuallyInside == cachedInside) {
-            Log.d(TAG, "reconcileGeofenceStateWithLocation: state matches (inside=$actuallyInside, distance=${distance.toInt()}m)")
-            return
-        }
-
-        Log.w(
-            TAG,
-            "reconcileGeofenceStateWithLocation: MISMATCH detected — actual inside=$actuallyInside, " +
-                "cached inside=$cachedInside (distance=${distance.toInt()}m, radius=${radius}m). " +
-                "Self-correcting a likely dropped OS geofence broadcast."
-        )
-
-        if (actuallyInside) {
-            setPreference("geofenceMessage", "ENTERED", appContext)
-            logGeofence(appContext, "ENTERED (self-heal)")
-            val lastStatus = getLastGarageStatus(appContext)
-            NotificationUtility.triggerNotification(appContext, LusionUtility.UpdateType.GEOFENCE, lastStatus)
-            // Kick a fresh status probe — same as a real ENTER transition would.
-            GarageUtility.makeStatusRequest(appContext, ignoreTimers = true, "GeofenceSelfHeal-enter")
-        } else {
-            setPreference("geofenceMessage", "EXITED", appContext)
-            logGeofence(appContext, "EXITED (self-heal)")
-            val lastStatus = getLastGarageStatus(appContext)
-            if (GarageUtility.shouldKeepNotificationOnGeofenceExit(lastStatus)) {
-                NotificationUtility.triggerNotification(appContext, LusionUtility.UpdateType.GEOFENCE, lastStatus)
+        val ageMs = (SystemClock.elapsedRealtimeNanos() - currentLocation.elapsedRealtimeNanos) / 1_000_000L
+        val correctedState = synchronized(this) {
+            val inside = insideFromLocation(currentLocation, distance, radius)
+            if (inside == null) {
+                Log.i(TAG, "Geofence reconciliation: rejected fix (ageMs=$ageMs, accuracy=${currentLocation.accuracy}, distance=${distance.toInt()}m)")
+                null
             } else {
-                NotificationUtility.dismissNotification(appContext)
+                latestTransitionNanos = currentLocation.elapsedRealtimeNanos
+                if (inside == GarageUtility.isInsideGeofence(appContext)) {
+                    null
+                } else {
+                    val state = if (inside) "ENTERED" else "EXITED"
+                    setPreference("geofenceMessage", state, appContext)
+                    Log.w(TAG, "Geofence reconciliation: corrected to $state (ageMs=$ageMs, distance=${distance.toInt()}m, radius=${radius}m)")
+                    state
+                }
             }
+        }
+        if (correctedState != null) {
+            logGeofence(appContext, "$correctedState (self-heal)")
+            NotificationUtility.refreshNotificationBasedOnGeofence(appContext)
+            // An EXIT can retain a cached OPEN/CLOSING card. Confirm the door on both
+            // directions so that a physically closed door does not leave that card up.
+            GarageUtility.makeStatusRequest(appContext, ignoreTimers = true, "GeofenceSelfHeal-$correctedState")
         }
     }
 
@@ -397,13 +457,15 @@ object GeofenceUtility {
         val homeLocation = getHomeLocation(appContext) ?: return null
         val fusedLocationClient = LocationUtility.initializeLocationClient(appContext)
         val currentLocation = try {
-            withTimeoutOrNull(5000L) {
+            withTimeoutOrNull(5000L.milliseconds) {
                 suspendCancellableCoroutine<Location?> { cont ->
                     fusedLocationClient.lastLocation
-                        .addOnSuccessListener { loc -> if (cont.isActive) cont.resume(loc, null) }
-                        .addOnFailureListener { if (cont.isActive) cont.resume(null, null) }
+                        .addOnSuccessListener { loc -> if (cont.isActive) cont.resume(loc) { _, _, _ -> } }
+                        .addOnFailureListener { if (cont.isActive) cont.resume(null) { _, _, _ -> } }
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "distanceToHomeMeters: location fetch failed: ${e.message}")
             null

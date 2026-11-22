@@ -8,7 +8,6 @@ import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.text.TextUtils
-import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.car.app.CarAppService
 import androidx.car.app.Screen
@@ -21,6 +20,7 @@ import com.lusion.sgauto.GarageUtility.GarageStatus
 import com.lusion.sgauto.GarageUtility.garageUpdateRunning
 //import com.lusion.sgauto.GarageUtility.testPostRequest
 import com.lusion.sgauto.LusionUtility.UpdateType
+import com.lusion.sgauto.PersistentLog as Log
 
 /**
  * Entry point for the hello world app.
@@ -57,7 +57,7 @@ class SGService : CarAppService() {
                 }
                 isUiMessageBroadcastReceiverRegistered = true
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to register uiMessageBroadcastReceiver: ${e.message}")
+                Log.e(TAG, "Failed to register uiMessageBroadcastReceiver: ${e.message}", e)
             }
         }
         registerBroadcastReceiver()
@@ -74,12 +74,14 @@ class SGService : CarAppService() {
         GarageUtility.startCarConnectMonitoring(applicationContext, "SGService")
         return object : Session() {
             override fun onCreateScreen(intent: Intent): Screen {
+                Log.i(TAG, "onCreateScreen")
                 return SGScreen(carContext)
             }
         }
     }
 
     override fun onDestroy() {
+        Log.i(TAG, "onDestroy")
         stopMonitoring()
         super.onDestroy()
     }
@@ -124,7 +126,7 @@ class SGService : CarAppService() {
             try {
                 unregisterReceiver(uiMessageBroadcastReceiver)
             } catch (e: Exception) {
-                Log.w(TAG, "uiMessageBroadcastReceiver not registered: ${e.message}")
+                Log.w(TAG, "uiMessageBroadcastReceiver not registered: ${e.message}", e)
             }
             isUiMessageBroadcastReceiverRegistered = false
         }
@@ -137,7 +139,7 @@ class SGService : CarAppService() {
             }
             garageUpdateThread?.takeIf { it.isAlive }?.interrupt()
         } catch (e: Exception) {
-            Log.e(TAG, "Error during stopMonitoring tasks: ${e.message}")
+            Log.e(TAG, "Error during stopMonitoring tasks: ${e.message}", e)
         }
     }
 
@@ -182,7 +184,7 @@ class SGService : CarAppService() {
                     intent.getSerializableExtra("TYPE")?.let { UpdateType.valueOf(it.toString()) }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error parsing UpdateType from intent: ${e.message}")
+                Log.e(TAG, "Error parsing UpdateType from intent: ${e.message}", e)
                 null
             }
             Log.i(TAG, "SGService BroadcastReceiver $responseType")
@@ -201,7 +203,7 @@ class SGService : CarAppService() {
                             intent.getSerializableExtra(it.toString()) as GarageStatus?
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "SGScreen broadcastReceiver received unknown garage status ${e.message}")
+                        Log.e(TAG, "SGScreen broadcastReceiver received unknown garage status ${e.message}", e)
 //                        testPostRequest(context, "Sender broadcastReceiver, exception unknown status")
                         GarageStatus.UNKNOWN
                     }

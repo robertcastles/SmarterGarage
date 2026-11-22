@@ -33,7 +33,8 @@ object NotificationBuilder {
         carNotificationTitle: String,
         headsUp: Boolean = false,
         headsUpChannelId: String? = null,
-        autoCarrier: Boolean = false
+        autoCarrier: Boolean = false,
+        statusIsLastKnown: Boolean = false
     ): NotificationCompat.Builder {
         var icon1 = R.drawable.garage_door_closing_arrow
         var icon2 = R.drawable.garage_door_opening_arrow
@@ -56,11 +57,16 @@ object NotificationBuilder {
 
         //TODO - use collapsed view based on preference?
         val collapsedView = RemoteViews(context.packageName, R.layout.notification_collapsed)
+        val statusTitle = if (statusIsLastKnown) {
+            context.getString(R.string.garage_status_last_known, garageStatus!!.name)
+        } else {
+            garageStatus!!.name
+        }
         val notificationText = (getPreference("show_request_time", Boolean::class.java, context) as Boolean).let {
             if (it) {
-                "${garageStatus!!.name} ${statusTimeString()}"
+                "$statusTitle ${statusTimeString()}"
             } else {
-                garageStatus!!.name
+                statusTitle
             }
         }
         //TODO - add a refresh to update garage status in expanded view
@@ -100,7 +106,7 @@ object NotificationBuilder {
         // set notification title to current time to force Android Auto to update icon on new notifications
         val builder = NotificationCompat.Builder(context, context.getString(R.string.garage_notification))
 //        return NotificationCompat.Builder(context, nowString())
-            .setContentTitle(garageStatus!!.name)
+            .setContentTitle(statusTitle)
             .setContentText(CONTENT_TEXT)
 //            .setContentText(nowString())
             .setSmallIcon(notificationImageID!!)

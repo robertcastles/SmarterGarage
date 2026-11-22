@@ -70,6 +70,7 @@ class SGAutoApp : Application() {
                     LusionUtility.isInCarSession = isNowConnected
                     Log.i(TAG, "isInCarSession set to: ${LusionUtility.isInCarSession}")
                     if (!isNowConnected) {
+                        GeofenceUtility.stopCarSessionMonitoring()
                         NotificationUtility.clearCarSessionNotification(applicationContext, restorePhoneStatus = wasConnected)
                     }
 

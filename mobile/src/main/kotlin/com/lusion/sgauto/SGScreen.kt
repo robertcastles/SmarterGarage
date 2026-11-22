@@ -9,7 +9,6 @@ import android.location.Location
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import androidx.car.app.CarAppPermission
 import androidx.car.app.CarContext
 import androidx.car.app.CarToast
@@ -30,6 +29,7 @@ import com.lusion.sgauto.GarageUtility.sendGarageCommand
 import com.lusion.sgauto.LusionUtility.getBitmapFromVectorDrawable
 import com.lusion.sgauto.PreferenceUtility.getPreference
 import java.util.Date
+import com.lusion.sgauto.PersistentLog as Log
 
 /**
  * Smarter Garage default Auto launch screen
@@ -171,7 +171,7 @@ class SGScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycleObs
             try {
                 carContext.unregisterReceiver(mBroadcastReceiver)
             } catch (e: Exception) {
-                Log.w(TAG, "mBroadcastReceiver not registered: ${e.message}")
+                Log.w(TAG, "mBroadcastReceiver not registered: ${e.message}", e)
             }
             isBroadcastReceiverRegistered = false
         }

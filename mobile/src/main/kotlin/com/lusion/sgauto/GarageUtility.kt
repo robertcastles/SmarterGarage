@@ -349,7 +349,7 @@ object GarageUtility {
     }
 
     private fun logApiError(context: Context, response: retrofit2.Response<*>, source: String) {
-        val bodyString = try { response.errorBody()?.string() } catch (e: Exception) { null }
+        val bodyString = try { response.errorBody()?.string() } catch (_: Exception) { null }
         val errorInfo = buildString {
             appendLine("URL: ${response.raw().request.url}")
             appendLine("Code: ${response.code()}")
@@ -591,12 +591,32 @@ object GarageUtility {
      */
     @Synchronized
     fun startCarConnectMonitoring(context: Context, source: String) {
+        NotificationUtility.beginCarSession()
+        GeofenceUtility.startCarSessionMonitoring(context)
         val now = System.currentTimeMillis()
         if (now - lastMonitoringTriggerTime < MONITORING_TRIGGER_DEBOUNCE_MS) {
             Log.i(TAG, "startCarConnectMonitoring: [$source] within ${MONITORING_TRIGGER_DEBOUNCE_MS}ms of a prior trigger, skipping (already handled)")
             return
         }
+        lastMonitoringTriggerTime = now
+        val appContext = context.applicationContext
+        // Preserve the immediate foreground start while the receiver still has its
+        // exemption. Only the outside/closed skip decision must wait for location.
+        val monitoringStarted = isInsideGeofence(context) ||
+            shouldKeepNotificationOnGeofenceExit(getLastGarageStatus(context))
+        val startedInCarSession = LusionUtility.isInCarSession
+        if (monitoringStarted) startMonitoringNow(appContext, source)
+        CoroutineScope(Dispatchers.IO).launch {
+            GeofenceUtility.reconcileGeofenceStateWithLocation(appContext)
+            if (startedInCarSession && !LusionUtility.isInCarSession) return@launch
+            if (LusionUtility.isInCarSession) {
+                NotificationUtility.refreshForCarSession(appContext)
+            }
+            if (!monitoringStarted) startMonitoringAfterLocationCheck(appContext, source)
+        }
+    }
 
+    private suspend fun startMonitoringAfterLocationCheck(context: Context, source: String) {
         // Getting in the car (CarConnectionReceiver / ENTER_CAR_MODE) is a very common
         // way to reach this function, but it fires no matter WHERE the car is. If we're
         // outside the geofence and the garage is confirmed CLOSED (not OPEN/OPENING/
@@ -617,32 +637,25 @@ object GarageUtility {
         val lastStatus = getLastGarageStatus(context)
         if (!isInsideGeofence(context) && !shouldKeepNotificationOnGeofenceExit(lastStatus)) {
             Log.i(TAG, "startCarConnectMonitoring: [$source] cached state looks like outside geofence + closed ($lastStatus) — running a fresh probe before deciding to skip")
-            lastMonitoringTriggerTime = now
             val appContext = context.applicationContext
-            CoroutineScope(Dispatchers.IO).launch {
-                val result = try {
-                    makeStatusRequest(appContext, ignoreTimers = true, "$source-carConnectProbe")
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w(TAG, "startCarConnectMonitoring: [$source] fresh probe failed: ${e.message}")
-                    StatusFetchResult.Failed()
-                }
-                // Re-evaluate with whatever the probe just confirmed (updateGarageAppAreas,
-                // invoked from the probe's response handling, updates getLastGarageStatus
-                // and isInsideGeofence's backing preference if a geofence event raced in).
-                val freshStatus = getLastGarageStatus(appContext)
-                if (result !is StatusFetchResult.Fresh || result.status != GarageStatus.CLOSED ||
-                    isInsideGeofence(appContext) || shouldKeepNotificationOnGeofenceExit(freshStatus)) {
-                    Log.i(TAG, "startCarConnectMonitoring: [$source] fresh probe shows monitoring IS needed (status=$freshStatus) — starting")
-                    startMonitoringNow(appContext, source)
-                } else {
-                    Log.i(TAG, "startCarConnectMonitoring: [$source] fresh probe confirms outside geofence and closed ($freshStatus) — nothing to monitor")
-                }
+            val result = try {
+                makeStatusRequest(appContext, ignoreTimers = true, "$source-carConnectProbe")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "startCarConnectMonitoring: [$source] fresh probe failed: ${e.message}")
+                StatusFetchResult.Failed()
+            }
+            val freshStatus = getLastGarageStatus(appContext)
+            if (result !is StatusFetchResult.Fresh || result.status != GarageStatus.CLOSED ||
+                isInsideGeofence(appContext) || shouldKeepNotificationOnGeofenceExit(freshStatus)) {
+                Log.i(TAG, "startCarConnectMonitoring: [$source] fresh probe shows monitoring IS needed (status=$freshStatus) — starting")
+                startMonitoringNow(appContext, source)
+            } else {
+                Log.i(TAG, "startCarConnectMonitoring: [$source] fresh probe confirms outside geofence and closed ($freshStatus) — nothing to monitor")
             }
             return
         }
-        lastMonitoringTriggerTime = now
         startMonitoringNow(context, source)
     }
 
@@ -932,6 +945,7 @@ object GarageUtility {
             gLastSuccessfulStatusTime = now
             consecutiveNetworkErrors = 0
             updateGarageAppAreas(context, currentStatus)
+            NotificationUtility.refreshCarStatusAfterConfirmation(context)
             return StatusFetchResult.Fresh(currentStatus, now)
         }
 

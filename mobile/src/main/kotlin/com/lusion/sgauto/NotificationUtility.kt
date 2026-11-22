@@ -22,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 object NotificationUtility {
     private const val TAG = "NotificationUtility"
@@ -68,6 +69,28 @@ object NotificationUtility {
     private val arrivalLease = AutoArrivalLease()
     private var arrivalStatus: GarageStatus? = null
     private var arrivalEvaluationStatus: GarageStatus? = null
+    private val carStatusConfirmation = AutoStatusConfirmation()
+    private var carStatusIsLastKnown = false
+
+    @Synchronized
+    fun beginCarSession() {
+        if (LusionUtility.isInCarSession) {
+            carStatusConfirmation.beginSession(System.currentTimeMillis())
+        }
+    }
+
+    @Synchronized
+    fun refreshCarStatusAfterConfirmation(context: Context) {
+        if (LusionUtility.isInCarSession && carStatusIsLastKnown &&
+            carStatusConfirmation.isConfirmed(GarageUtility.gLastSuccessfulStatusTime)) {
+            refreshForCarSession(context)
+        }
+    }
+
+    private fun isLastKnownCarStatus(status: GarageStatus?): Boolean =
+        LusionUtility.isInCarSession &&
+            (status == GarageStatus.OPEN || status == GarageStatus.CLOSED) &&
+            !carStatusConfirmation.isConfirmed(GarageUtility.gLastSuccessfulStatusTime)
 
     @SuppressLint("MissingPermission")
     fun triggerNotification(
@@ -89,7 +112,6 @@ object NotificationUtility {
         // dropped it (Samsung throttling / frozen process), the cached "last status"
         // can disagree with what the user sees — so we must always re-post to resync.
         val notificationVisible = isGarageNotificationActive(context)
-        val carNeedsRecovery = LusionUtility.isInCarSession && !notificationVisible
 
         // ---- Hard global rate-limit (prevents Samsung-visible notification spam) ----
         // GARAGESTATUS updates carry fresh data from the API and must not be blocked
@@ -97,7 +119,7 @@ object NotificationUtility {
         // The floor is only enforced while the notification is actually visible; if it
         // was dropped we bypass the floor to guarantee the user sees the current state.
         val effectiveFloor = if (updateType == UpdateType.GARAGESTATUS) 300L else NOTIFICATION_MIN_INTERVAL_MS
-        if (notificationVisible && !carNeedsRecovery &&
+        if (notificationVisible &&
             localGarageStatus == getLastNotificationStatus(context) &&
             now - lastNotifyPostTimeMs < effectiveFloor) {
             Log.d(TAG, "triggerNotification: global rate-limit, skipping ($updateType)")
@@ -122,7 +144,7 @@ object NotificationUtility {
 
         // Only skip the repeat post when the status is unchanged AND the notification
         // is still actually on screen. A dropped notification must always be re-posted.
-        if (isStatusUnchanged && timeDiff < skipThreshold && notificationVisible && !carNeedsRecovery) {
+        if (isStatusUnchanged && timeDiff < skipThreshold && notificationVisible) {
             Log.i(TAG, "triggerNotification: repeat, skipping (type=$updateType, car=${LusionUtility.isInCarSession}, threshold=${skipThreshold}ms)")
             return
         }
@@ -159,7 +181,8 @@ object NotificationUtility {
         garageStatus: GarageStatus?,
         carNotificationTitle: String = garageStatus?.name ?: "Smarter Garage",
         headsUp: Boolean = false,
-        autoCarrier: Boolean = false
+        autoCarrier: Boolean = false,
+        statusIsLastKnown: Boolean = false
     ): androidx.core.app.NotificationCompat.Builder {
         var localGarageStatus = garageStatus
 
@@ -272,7 +295,8 @@ object NotificationUtility {
             carNotificationTitle,
             headsUp = headsUp,
             headsUpChannelId = if (headsUp) context.getString(R.string.garage_arrival_channel_id) else null,
-            autoCarrier = autoCarrier
+            autoCarrier = autoCarrier,
+            statusIsLastKnown = statusIsLastKnown
         )
         return builder
     }
@@ -306,7 +330,7 @@ object NotificationUtility {
             return
         }
 
-        val generation = synchronized(this) { arrivalLease.generation }
+        val sessionGeneration = synchronized(this) { arrivalLease.sessionGeneration }
         carPostScope.launch {
             val distance = GeofenceUtility.distanceToHomeMeters(context)
             if (distance == null) {
@@ -325,7 +349,10 @@ object NotificationUtility {
                 if (!LusionUtility.isInCarSession ||
                     (!GarageUtility.isInsideGeofence(context) && !GarageUtility.shouldKeepNotificationOnGeofenceExit(latest)) ||
                     admittedAt - lastArrivalHeadsUpTime < ARRIVAL_HEADS_UP_MIN_INTERVAL_MS) return@synchronized
-                val lease = arrivalLease.admit(generation) ?: return@synchronized
+                val lease = arrivalLease.admitForSession(sessionGeneration) ?: run {
+                    Log.i(TAG, "postArrivalHeadsUp: session changed or arrival already active, skipping")
+                    return@synchronized
+                }
                 val arrivalId = context.resources.getInteger(R.integer.garage_arrival_notification_id)
                 val manager = CarNotificationManager.from(context)
                 try {
@@ -334,8 +361,10 @@ object NotificationUtility {
                     pendingCarBuilder = null
                     lastCarPostedStatus = null
                     manager.cancel(autoNotificationId(context))
+                    carStatusIsLastKnown = isLastKnownCarStatus(latest)
                     val builder = buildGarageNotificationBuilder(context, UpdateType.GARAGESTATUS, latest,
-                        headsUp = true, carNotificationTitle = "Smarter Garage")
+                        headsUp = true, carNotificationTitle = "Smarter Garage",
+                        statusIsLastKnown = carStatusIsLastKnown)
                         .setTimeoutAfter(ARRIVAL_HEADS_UP_TIMEOUT_MS)
                     manager.notify(arrivalId, builder)
                     retirePhoneStatus(context)
@@ -351,7 +380,7 @@ object NotificationUtility {
                     return@synchronized
                 }
                 carPostScope.launch {
-                    delay(ARRIVAL_HEADS_UP_TIMEOUT_MS)
+                    delay(ARRIVAL_HEADS_UP_TIMEOUT_MS.milliseconds)
                     synchronized(this@NotificationUtility) {
                         if (!arrivalLease.release(lease)) return@synchronized
                         arrivalStatus = null
@@ -369,13 +398,15 @@ object NotificationUtility {
      * there is no geofence ENTER transition in that case).
      */
     fun scheduleArrivalHeadsUpAfterCarStart(context: Context) {
-        val generation = synchronized(this) { arrivalLease.generation }
+        val sessionGeneration = synchronized(this) { arrivalLease.sessionGeneration }
         carPostScope.launch {
-            delay(CAR_START_ARRIVAL_HEADS_UP_DELAY_MS)
+            delay(CAR_START_ARRIVAL_HEADS_UP_DELAY_MS.milliseconds)
             Log.i(TAG, "scheduleArrivalHeadsUpAfterCarStart: delay elapsed, evaluating arrival heads-up")
             synchronized(this@NotificationUtility) {
-                if (generation == arrivalLease.generation && LusionUtility.isInCarSession) {
+                if (sessionGeneration == arrivalLease.sessionGeneration && LusionUtility.isInCarSession) {
                     postArrivalHeadsUp(context, getLastGarageStatus(context))
+                } else {
+                    Log.i(TAG, "scheduleArrivalHeadsUpAfterCarStart: car session ended or replaced, skipping")
                 }
             }
         }
@@ -388,6 +419,7 @@ object NotificationUtility {
      */
     @SuppressLint("MissingPermission")
     fun refreshForCarSession(context: Context) {
+        beginCarSession()
         val status = getLastGarageStatus(context)
         val shouldBeVisible = GarageUtility.isInsideGeofence(context) ||
             GarageUtility.shouldKeepNotificationOnGeofenceExit(status)
@@ -445,7 +477,10 @@ object NotificationUtility {
             dismissNotification(appContext)
             return null
         }
-        val phoneNotification = buildGarageNotificationBuilder(appContext, updateType, status).build()
+        beginCarSession()
+        val statusIsLastKnown = isLastKnownCarStatus(status)
+        val phoneNotification = buildGarageNotificationBuilder(appContext, updateType, status,
+            statusIsLastKnown = statusIsLastKnown).build()
         lastNotifyPostTimeMs = System.currentTimeMillis()
         setLastNotificationStatus(appContext, status)
         if (!LusionUtility.isInCarSession) {
@@ -457,6 +492,8 @@ object NotificationUtility {
             return phoneNotification
         }
         retirePhoneStatus(appContext)
+        val confirmationChanged = carStatusIsLastKnown != statusIsLastKnown
+        carStatusIsLastKnown = statusIsLastKnown
         if (arrivalEvaluationStatus != status) {
             arrivalLease.invalidate()
             arrivalStatus = null
@@ -464,32 +501,34 @@ object NotificationUtility {
             NotificationManagerCompat.from(appContext).cancel(appContext.resources.getInteger(R.integer.garage_arrival_notification_id))
         }
         if (arrivalLease.active) {
-            if (arrivalStatus == status) return phoneNotification
+            if (arrivalStatus == status && !confirmationChanged) return phoneNotification
             arrivalLease.invalidate()
             arrivalStatus = null
             NotificationManagerCompat.from(appContext).cancel(appContext.resources.getInteger(R.integer.garage_arrival_notification_id))
         }
         // Reuse the current title for in-place updates; toggle only on recreation.
         val currentTitle = if ((carRefreshSequence.get() - 1) and 1 == 0) "Smarter Garage" else "Smarter Garage "
-        val autoBuilder = buildGarageNotificationBuilder(appContext, updateType, status, carNotificationTitle = currentTitle, autoCarrier = true)
+        val autoBuilder = buildGarageNotificationBuilder(appContext, updateType, status,
+            carNotificationTitle = currentTitle, autoCarrier = true, statusIsLastKnown = statusIsLastKnown)
         if (pendingCarStatus == status) {
-            pendingCarBuilder = buildGarageNotificationBuilder(appContext, updateType, status, carNotificationTitle = currentTitle, autoCarrier = true)
+            pendingCarBuilder = autoBuilder
             return phoneNotification
         }
-        if (!forceLifecycleRefresh && pendingCarStatus == null && lastCarPostedStatus == status && isAutoNotificationActive(appContext)) {
+        if (!forceLifecycleRefresh && !confirmationChanged && pendingCarStatus == null && lastCarPostedStatus == status && isAutoNotificationActive(appContext)) {
             CarNotificationManager.from(appContext).notify(autoNotificationId(appContext), autoBuilder)
             return phoneNotification
         }
         val sequence = carRefreshSequence.getAndIncrement()
         val carTitle = if (sequence and 1 == 0) "Smarter Garage" else "Smarter Garage "
-        pendingCarBuilder = buildGarageNotificationBuilder(appContext, updateType, status, carNotificationTitle = carTitle, autoCarrier = true)
+        pendingCarBuilder = buildGarageNotificationBuilder(appContext, updateType, status,
+            carNotificationTitle = carTitle, autoCarrier = true, statusIsLastKnown = statusIsLastKnown)
         val manager = CarNotificationManager.from(appContext)
         val myToken = carPostToken.incrementAndGet()
         pendingCarStatus = status
         manager.cancel(autoNotificationId(appContext))
         Log.i(TAG, "Auto carrier cancel+recreate: status=$status, token=$myToken")
         carPostScope.launch {
-            delay(AA_RECREATE_GAP_MS)
+            delay(AA_RECREATE_GAP_MS.milliseconds)
             synchronized(this@NotificationUtility) {
                 if (carPostToken.get() != myToken) return@synchronized
                 if (!LusionUtility.isInCarSession || (!GarageUtility.isInsideGeofence(appContext) && !GarageUtility.shouldKeepNotificationOnGeofenceExit(status))) {
@@ -510,9 +549,11 @@ object NotificationUtility {
     /** Disconnect cleanup must never remove phone controls or foreground monitors. */
     @Synchronized
     fun clearCarSessionNotification(context: Context, restorePhoneStatus: Boolean = false) {
-        arrivalLease.invalidate()
+        arrivalLease.invalidateSession()
         arrivalStatus = null
         arrivalEvaluationStatus = null
+        carStatusIsLastKnown = false
+        if (!LusionUtility.isInCarSession) carStatusConfirmation.endSession()
         NotificationManagerCompat.from(context).cancel(context.resources.getInteger(R.integer.garage_arrival_notification_id))
         carPostToken.incrementAndGet()
         pendingCarStatus = null

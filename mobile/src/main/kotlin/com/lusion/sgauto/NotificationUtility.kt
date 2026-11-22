@@ -61,8 +61,8 @@ object NotificationUtility {
     private const val ARRIVAL_HEADS_UP_MIN_INTERVAL_MS = 60_000L
     /** Arrival heads-up auto-dismisses after this so it doesn't linger as a duplicate card. */
     private const val ARRIVAL_HEADS_UP_TIMEOUT_MS = 12_000L
-    /** Only pop the arrival heads-up when this close to home (hard-coded for now). */
-    private const val ARRIVAL_HEADS_UP_RADIUS_M = 10f
+    /** Only pop the arrival heads-up when this close to home (accounts for garage/indoor GPS drift). */
+    private const val ARRIVAL_HEADS_UP_RADIUS_M = 100f
     /** After Android Auto attaches, wait this long before checking whether to pop the heads-up. */
     private const val CAR_START_ARRIVAL_HEADS_UP_DELAY_MS = 10_000L
     @Volatile private var lastArrivalHeadsUpTime = 0L
@@ -398,13 +398,14 @@ object NotificationUtility {
      * there is no geofence ENTER transition in that case).
      */
     fun scheduleArrivalHeadsUpAfterCarStart(context: Context) {
+        val appContext = context.applicationContext
         val sessionGeneration = synchronized(this) { arrivalLease.sessionGeneration }
         carPostScope.launch {
             delay(CAR_START_ARRIVAL_HEADS_UP_DELAY_MS.milliseconds)
             Log.i(TAG, "scheduleArrivalHeadsUpAfterCarStart: delay elapsed, evaluating arrival heads-up")
             synchronized(this@NotificationUtility) {
                 if (sessionGeneration == arrivalLease.sessionGeneration && LusionUtility.isInCarSession) {
-                    postArrivalHeadsUp(context, getLastGarageStatus(context))
+                    postArrivalHeadsUp(appContext, getLastGarageStatus(appContext))
                 } else {
                     Log.i(TAG, "scheduleArrivalHeadsUpAfterCarStart: car session ended or replaced, skipping")
                 }

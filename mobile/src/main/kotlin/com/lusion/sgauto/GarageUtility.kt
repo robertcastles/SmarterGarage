@@ -611,6 +611,7 @@ object GarageUtility {
             if (startedInCarSession && !LusionUtility.isInCarSession) return@launch
             if (LusionUtility.isInCarSession) {
                 NotificationUtility.refreshForCarSession(appContext)
+                NotificationUtility.scheduleArrivalHeadsUpAfterCarStart(appContext)
             }
             if (!monitoringStarted) startMonitoringAfterLocationCheck(appContext, source)
         }

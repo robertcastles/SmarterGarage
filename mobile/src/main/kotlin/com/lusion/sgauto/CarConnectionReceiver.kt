@@ -52,6 +52,7 @@ class CarConnectionReceiver : BroadcastReceiver() {
 
         if (isConnected) {
             Log.i(TAG, "Connected to car (Android Auto/Automotive). Refreshing garage status...")
+            LusionUtility.isInCarSession = true
 
             // Routed through the shared, debounced helper — SGAutoApp's in-process
             // CarConnection LiveData observer reacts to this SAME real-world event and

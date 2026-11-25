@@ -24,7 +24,7 @@ android {
         // we're ready. Suppress the advisory "not targeting latest SDK" lint.
         //noinspection OldTargetApi,GradleDependency,ExpiredTargetSdkVersion
         targetSdk = 36
-        versionCode = 585
+        versionCode = 586
         versionName = "2025.${versionCode}"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

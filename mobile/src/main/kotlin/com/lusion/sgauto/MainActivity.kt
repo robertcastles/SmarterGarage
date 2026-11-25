@@ -105,6 +105,7 @@ import com.lusion.sgauto.NotificationUtility.dismissNotification
 import com.lusion.sgauto.NotificationUtility.triggerNotification
 import com.lusion.sgauto.PermissionUtility.checkLocationPermissions
 import com.lusion.sgauto.PermissionUtility.clearRequestingFlag
+import com.lusion.sgauto.PermissionUtility.requestBluetoothConnectPermissionIfNeeded
 import com.lusion.sgauto.PermissionUtility.requestNotificationPermissionIfNeeded
 import com.lusion.sgauto.PreferenceUtility.getHomeLocation
 import com.lusion.sgauto.PreferenceUtility.getPreference
@@ -172,8 +173,11 @@ class MainActivity : AppCompatActivity(), LocationListener, OnSharedPreferenceCh
                 onPermissionsGranted()
             }
             // Request notification permission only if we're staying on MainActivity
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val requestedNotification = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                 requestNotificationPermissionIfNeeded(this)
+            // Prompt for Nearby Devices (Bluetooth) so existing users who upgraded get car-connect wake
+            if (!requestedNotification) {
+                requestBluetoothConnectPermissionIfNeeded(this)
             }
         }
 
@@ -462,6 +466,12 @@ class MainActivity : AppCompatActivity(), LocationListener, OnSharedPreferenceCh
             Constants.POST_NOTIFICATIONS_REQUEST -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     showSnackbar(this, "Notifications access granted")
+                }
+                requestBluetoothConnectPermissionIfNeeded(this)
+            }
+            Constants.BLUETOOTH_CONNECT_REQUEST -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    showSnackbar(this, "Nearby devices access granted")
                 }
             }
         }
